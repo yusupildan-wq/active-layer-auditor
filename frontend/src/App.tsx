@@ -4,6 +4,7 @@ import Header from './components/Header'
 import DashboardPage from './pages/DashboardPage'
 import ScanPage from './pages/ScanPage'
 import OptionSetPage from './pages/OptionSetPage'
+import ReadinessPage from './pages/ReadinessPage'
 
 export default function App() {
   useSmoothScroll()
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/"           element={<DashboardPage />} />
         <Route path="/scan"       element={<ScanPage />} />
         <Route path="/optionsets" element={<OptionSetPage />} />
+        <Route path="/readiness" element={<ReadinessPage />} />
       </Routes>
       <footer
         className="max-w-7xl mx-auto px-6 py-8 flex items-center justify-between"

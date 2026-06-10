@@ -43,3 +43,31 @@ export interface OptionSetCheckResult {
   values: OptionSetValueStatus[]
   error?: string
 }
+
+export type CheckCategory =
+  | 'Active Layer'
+  | 'Option Sets'
+  | 'Solutions'
+  | 'Environment Variables'
+  | 'Connection References'
+  | 'Flows'
+
+export interface ReadinessCheck {
+  name: string
+  category: CheckCategory
+  status: 'pass' | 'warn' | 'fail' | 'skip'
+  message: string
+  details?: string[]
+  remediation?: string
+}
+
+export interface ReadinessReport {
+  environment: string
+  timestamp: string
+  overallStatus: 'READY' | 'NOT READY' | 'WARNINGS'
+  passed: number
+  warnings: number
+  failures: number
+  skipped: number
+  checks: ReadinessCheck[]
+}

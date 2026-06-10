@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 const PAGE_LABELS: Record<string, string> = {
   '/scan':       'Active Layer Scanner',
   '/optionsets': 'Option Set Guard',
+  '/readiness':  'Deployment Readiness Checker',
 }
 
 export default function Header() {

@@ -143,7 +143,7 @@ export default function DashboardPage() {
           Features
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-slide-up">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 animate-slide-up">
           <FeatureCard
             index="01"
             title="Active Layer Scanner"
@@ -174,6 +174,22 @@ export default function DashboardPage() {
               </svg>
             }
             onClick={() => navigate('/optionsets')}
+          />
+
+          <FeatureCard
+            index="03"
+            title="Deployment Readiness Checker"
+            description="Validate your environment is fully prepared before a Greymatter deployment."
+            detail="Runs 6 automated checks across active layers, flows, solutions, env vars, connections, and option sets — generating a single pass/fail report."
+            accentColor="#4ade80"
+            accentGlow="rgba(34,197,94,0.08)"
+            topLine="linear-gradient(90deg, transparent, rgba(74,222,128,0.55), transparent)"
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" style={{ color: '#4ade80' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            }
+            onClick={() => navigate('/readiness')}
           />
         </div>
       </main>

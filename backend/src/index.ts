@@ -19,7 +19,12 @@ if (missing.length > 0) {
 const app = express()
 const PORT = process.env.PORT ?? 3001
 
-app.use(cors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' }))
+const allowedOrigin = process.env.FRONTEND_URL
+app.use(cors({
+  origin: allowedOrigin
+    ? allowedOrigin
+    : (origin, cb) => cb(null, !origin || /^https?:\/\/localhost(:\d+)?$/.test(origin)),
+}))
 app.use(express.json())
 
 app.use('/api/scan', scanRouter)

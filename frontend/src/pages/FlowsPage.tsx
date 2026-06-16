@@ -41,12 +41,13 @@ function EnabledPill({ enabled }: { enabled: boolean }) {
 }
 
 function FlowCompareSection() {
-  const [sourceUrl, setSourceUrl] = useState('')
-  const [targetUrl, setTargetUrl] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError]         = useState<string | null>(null)
-  const [data, setData]           = useState<FlowCompareResponse | null>(null)
-  const [filter, setFilter]       = useState<CompareFilter>('all')
+  const [sourceUrl, setSourceUrl]       = useState('')
+  const [targetUrl, setTargetUrl]       = useState('')
+  const [isLoading, setIsLoading]       = useState(false)
+  const [error, setError]               = useState<string | null>(null)
+  const [data, setData]                 = useState<FlowCompareResponse | null>(null)
+  const [filter, setFilter]             = useState<CompareFilter>('all')
+  const [showAllCompare, setShowAllCompare] = useState(false)
 
   async function handleCompare(e: React.FormEvent) {
     e.preventDefault()
@@ -167,7 +168,7 @@ function FlowCompareSection() {
           {/* Filter tabs */}
           <div className="px-6 py-3 flex flex-wrap gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
             {tabs.map(t => (
-              <button key={t.key} onClick={() => setFilter(t.key)}
+              <button key={t.key} onClick={() => { setFilter(t.key); setShowAllCompare(false) }}
                 className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
                 style={filter === t.key
                   ? { backgroundColor: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.25)' }
@@ -193,7 +194,7 @@ function FlowCompareSection() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((flow, i) => (
+                  {filtered.slice(0, showAllCompare ? undefined : 10).map((flow, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{flow.name}</td>
                       <td className="px-4 py-3"><CompareStatusBadge status={flow.status} /></td>
@@ -210,6 +211,15 @@ function FlowCompareSection() {
                   ))}
                 </tbody>
               </table>
+              {filtered.length > 10 && (
+                <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+                  <button onClick={() => setShowAllCompare(v => !v)}
+                    className="text-xs font-medium transition-colors"
+                    style={{ color: '#60a5fa' }}>
+                    {showAllCompare ? 'Show less' : `Show ${filtered.length - 10} more`}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -398,6 +408,7 @@ export default function FlowsPage() {
   const [error, setError]         = useState<string | null>(null)
   const [data, setData]           = useState<FlowHealthResponse | null>(null)
   const [filter, setFilter]       = useState<FilterTab>('all')
+  const [showAll, setShowAll]     = useState(false)
 
   async function handleCheck(e: React.FormEvent) {
     e.preventDefault()
@@ -555,8 +566,9 @@ export default function FlowsPage() {
               {/* Filter tabs */}
               <div className="px-6 py-3 flex gap-2" style={{ borderBottom: '1px solid var(--border)' }}>
                 {tabs.map(t => (
-                  <button key={t.key} onClick={() => setFilter(t.key)}
+                  <button key={t.key}
                     className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
+                    onClick={() => { setFilter(t.key); setShowAll(false) }}
                     style={filter === t.key
                       ? { backgroundColor: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.25)' }
                       : { backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-bright)' }
@@ -586,9 +598,18 @@ export default function FlowsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map(flow => <FlowRow key={flow.flowId} flow={flow} />)}
+                      {filtered.slice(0, showAll ? undefined : 10).map(flow => <FlowRow key={flow.flowId} flow={flow} />)}
                     </tbody>
                   </table>
+                  {filtered.length > 10 && (
+                    <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+                      <button onClick={() => setShowAll(v => !v)}
+                        className="text-xs font-medium transition-colors"
+                        style={{ color: '#60a5fa' }}>
+                        {showAll ? `Show less` : `Show ${filtered.length - 10} more`}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

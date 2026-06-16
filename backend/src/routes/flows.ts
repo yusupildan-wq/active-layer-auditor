@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import { ConfidentialClientApplication } from '@azure/msal-node'
-import { getFlowHealth } from '../flows'
+import { getFlowHealth, compareFlows } from '../flows'
 
 export const flowsRouter = Router()
 
@@ -29,6 +29,27 @@ async function makeDataverseClient(environmentUrl: string) {
     },
   })
 }
+
+flowsRouter.get('/compare', async (req: Request, res: Response) => {
+  const { sourceUrl, targetUrl } = req.query
+  if (!sourceUrl || !targetUrl || typeof sourceUrl !== 'string' || typeof targetUrl !== 'string') {
+    res.status(400).json({ error: 'sourceUrl and targetUrl query params are required' })
+    return
+  }
+  try {
+    const [sourceClient, targetClient] = await Promise.all([
+      makeDataverseClient(sourceUrl),
+      makeDataverseClient(targetUrl),
+    ])
+    const flows = await compareFlows(sourceClient, targetClient)
+    res.json({ sourceUrl, targetUrl, totalFlows: flows.length, flows })
+  } catch (err) {
+    const detail = axios.isAxiosError(err)
+      ? (err.response?.data?.error?.message ?? err.message)
+      : (err instanceof Error ? err.message : 'Failed')
+    res.status(500).json({ error: detail })
+  }
+})
 
 flowsRouter.get('/health', async (req: Request, res: Response) => {
   const { environmentUrl } = req.query

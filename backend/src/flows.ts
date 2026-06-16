@@ -55,6 +55,78 @@ function sessionToRun(s: any): FlowLastRun {
   }
 }
 
+export type FlowCompareStatus = 'match' | 'drift' | 'source_only' | 'target_only'
+
+export interface FlowCompareEntry {
+  name: string
+  status: FlowCompareStatus
+  source: { enabled: boolean; modifiedOn: string } | null
+  target: { enabled: boolean; modifiedOn: string } | null
+  driftReasons: string[]
+}
+
+async function getFlowList(client: AxiosInstance): Promise<{ name: string; enabled: boolean; modifiedOn: string }[]> {
+  const resp = await client.get(
+    `/workflows?$filter=category eq 5&$select=name,statecode,modifiedon&$orderby=name asc`
+  )
+  return (resp.data.value ?? []).map((f: any) => ({
+    name: f.name,
+    enabled: f.statecode === 1,
+    modifiedOn: f.modifiedon,
+  }))
+}
+
+export async function compareFlows(
+  sourceClient: AxiosInstance,
+  targetClient: AxiosInstance
+): Promise<FlowCompareEntry[]> {
+  const [sourceFlows, targetFlows] = await Promise.all([
+    getFlowList(sourceClient),
+    getFlowList(targetClient),
+  ])
+
+  const sourceMap = new Map(sourceFlows.map(f => [f.name.trim().toLowerCase(), f]))
+  const targetMap = new Map(targetFlows.map(f => [f.name.trim().toLowerCase(), f]))
+  const allNames = new Set([...sourceMap.keys(), ...targetMap.keys()])
+
+  const results: FlowCompareEntry[] = []
+
+  for (const key of allNames) {
+    const s = sourceMap.get(key) ?? null
+    const t = targetMap.get(key) ?? null
+
+    if (s && !t) {
+      results.push({ name: s.name, status: 'source_only', source: s, target: null, driftReasons: ['Not deployed to target'] })
+    } else if (!s && t) {
+      results.push({ name: t.name, status: 'target_only', source: null, target: t, driftReasons: ['Not present in source'] })
+    } else if (s && t) {
+      const driftReasons: string[] = []
+      if (s.enabled !== t.enabled) {
+        driftReasons.push(`${s.enabled ? 'Enabled' : 'Disabled'} in source, ${t.enabled ? 'enabled' : 'disabled'} in target`)
+      }
+      const srcDate = new Date(s.modifiedOn).getTime()
+      const tgtDate = new Date(t.modifiedOn).getTime()
+      const diffDays = Math.round(Math.abs(srcDate - tgtDate) / 86400000)
+      if (diffDays >= 1) {
+        const newer = srcDate > tgtDate ? 'source' : 'target'
+        driftReasons.push(`${newer === 'source' ? 'Source' : 'Target'} modified ${diffDays}d more recently — may have undeployed changes`)
+      }
+      results.push({
+        name: s.name,
+        status: driftReasons.length > 0 ? 'drift' : 'match',
+        source: s,
+        target: t,
+        driftReasons,
+      })
+    }
+  }
+
+  return results.sort((a, b) => {
+    const order: Record<FlowCompareStatus, number> = { drift: 0, source_only: 1, target_only: 2, match: 3 }
+    return order[a.status] - order[b.status] || a.name.localeCompare(b.name)
+  })
+}
+
 export async function getFlowHealth(client: AxiosInstance): Promise<FlowHealth[]> {
   // Fetch all modern cloud flows (category 5)
   const flowsResp = await client.get(

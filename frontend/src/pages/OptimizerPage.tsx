@@ -129,6 +129,7 @@ export default function OptimizerPage() {
   const [repoPRs, setRepoPRs] = useState<PRResult[] | null>(null)
   const [repoApplyError, setRepoApplyError] = useState<string | null>(null)
   const [confirmRepoOpen, setConfirmRepoOpen] = useState(false)
+  const [aiMode, setAiMode] = useState(false)
 
   async function loadDefinitions(e: React.FormEvent) {
     e.preventDefault()
@@ -160,7 +161,10 @@ export default function OptimizerPage() {
     setPr(null)
     setShowYaml(false)
     try {
-      const resp = await apiFetch(`${API_URL}/api/optimizer/analyze?projectUrl=${encodeURIComponent(projectUrl)}&definitionId=${selectedId}`)
+      const endpoint = aiMode
+        ? `${API_URL}/api/optimizer/ai-analyze?projectUrl=${encodeURIComponent(projectUrl)}&definitionId=${selectedId}`
+        : `${API_URL}/api/optimizer/analyze?projectUrl=${encodeURIComponent(projectUrl)}&definitionId=${selectedId}`
+      const resp = await apiFetch(endpoint)
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error ?? 'Analysis failed')
       setAnalysis(data)
@@ -461,28 +465,72 @@ export default function OptimizerPage() {
                     <p className="text-xs mt-0.5" style={{ color: '#f87171' }}>Classic pipeline — cannot be optimized</p>
                   )}
                 </div>
-                <button
-                  onClick={analyze}
-                  disabled={analyzing || !selectedDef?.optimizable}
-                  className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
-                  style={{ backgroundColor: '#b45309', color: '#fff', boxShadow: '0 0 16px rgba(180,83,9,0.2)' }}
-                  onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#d97706' }}
-                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#b45309' }}
-                >
-                  {analyzing ? (
-                    <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />Analyzing…</>
-                  ) : (
-                    <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-                    </svg>Analyze Pipeline</>
-                  )}
-                </button>
+                <div className="flex items-center gap-3 shrink-0">
+                  {/* AI mode toggle */}
+                  <button
+                    onClick={() => setAiMode(v => !v)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all"
+                    style={{
+                      backgroundColor: aiMode ? 'rgba(167,139,250,0.12)' : 'var(--bg-elevated)',
+                      border: `1px solid ${aiMode ? 'rgba(167,139,250,0.4)' : 'var(--border-mid)'}`,
+                      color: aiMode ? '#a78bfa' : 'var(--text-muted)',
+                    }}
+                    title="AI mode uses local Ollama to intelligently rewrite dependsOn chains and parallelize stages"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    AI Mode
+                  </button>
+                  <button
+                    onClick={analyze}
+                    disabled={analyzing || !selectedDef?.optimizable}
+                    className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap"
+                    style={{
+                      backgroundColor: aiMode ? '#6d28d9' : '#b45309',
+                      color: '#fff',
+                      boxShadow: aiMode ? '0 0 16px rgba(109,40,217,0.25)' : '0 0 16px rgba(180,83,9,0.2)',
+                    }}
+                    onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = aiMode ? '#7c3aed' : '#d97706' }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = aiMode ? '#6d28d9' : '#b45309' }}
+                  >
+                    {analyzing ? (
+                      <><span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />{aiMode ? 'AI Analyzing…' : 'Analyzing…'}</>
+                    ) : (
+                      <>
+                        {aiMode
+                          ? <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                            </svg>
+                          : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                            </svg>
+                        }
+                        {aiMode ? 'AI Analyze' : 'Analyze Pipeline'}
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
           </div>
         )}
 
         {/* Analysis error */}
+        {analyzing && aiMode && (
+          <div className="rounded-xl px-5 py-4 flex items-center gap-3"
+            style={{ backgroundColor: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)' }}>
+            <span className="w-4 h-4 rounded-full border-2 shrink-0 animate-spin"
+              style={{ borderColor: 'rgba(167,139,250,0.3)', borderTopColor: '#a78bfa' }} />
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#a78bfa' }}>AI is analyzing the pipeline…</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Reading YAML, identifying dependencies, rewriting parallelism. This takes 30–90 seconds.
+              </p>
+            </div>
+          </div>
+        )}
+
         {analysisError && mode === 'single' && (
           <div className="rounded-xl px-5 py-4"
             style={{ backgroundColor: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.18)', color: '#f87171' }}>
@@ -775,13 +823,24 @@ export default function OptimizerPage() {
               <div className="absolute top-0 left-0 right-0 h-px"
                 style={{ background: 'linear-gradient(90deg, transparent, rgba(245,158,11,0.4), transparent)' }} />
 
-              <div className="px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
-                <h3 className="font-display font-semibold text-base" style={{ color: 'var(--text-primary)' }}>
-                  Optimizations — {analysis.pipelineName}
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  {analysis.yamlPath} · {analysis.repositoryName}
-                </p>
+              <div className="px-6 py-5 flex items-start justify-between gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <h3 className="font-display font-semibold text-base" style={{ color: 'var(--text-primary)' }}>
+                    Optimizations — {analysis.pipelineName}
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {analysis.yamlPath} · {analysis.repositoryName}
+                  </p>
+                </div>
+                {(analysis as any).aiMode && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg shrink-0"
+                    style={{ backgroundColor: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa' }}>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    AI Mode
+                  </span>
+                )}
               </div>
 
               {analysis.optimizations.length === 0 ? (

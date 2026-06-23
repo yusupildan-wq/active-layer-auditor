@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import { listDefinitions, fetchAndAnalyze, createOptimizationPRSafely, analyzeRepository, createRepoOptimizationPRs } from '../optimizer'
+import { analyzeWithAI } from '../ai'
 import { recordAuditEvent } from '../audit'
 
 export const optimizerRouter = Router()
@@ -100,6 +101,49 @@ optimizerRouter.post('/apply', async (req: Request, res: Response) => {
     })
     res.status(500).json({ error: detail })
   }
+})
+
+// GET /api/optimizer/ai-analyze?projectUrl=...&definitionId=...
+// Uses local Ollama LLM for intelligent optimization including parallelism rewrites
+optimizerRouter.get('/ai-analyze', async (req: Request, res: Response) => {
+  const { projectUrl, definitionId } = req.query
+  if (!projectUrl || typeof projectUrl !== 'string') {
+    res.status(400).json({ error: 'projectUrl is required' }); return
+  }
+  if (!definitionId || typeof definitionId !== 'string' || isNaN(parseInt(definitionId, 10))) {
+    res.status(400).json({ error: 'definitionId is required' }); return
+  }
+  const pat = getPat(res)
+  if (!pat) return
+  try {
+    const base = await fetchAndAnalyze(projectUrl, pat, parseInt(definitionId, 10))
+    const aiResult = await analyzeWithAI(base.originalYaml)
+
+    const optimizations = aiResult.changes.map(c => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      estimatedSavingMinutes: c.estimatedSavingMinutes,
+      confidence: c.confidence,
+      category: c.category,
+    }))
+
+    const normalizedYamlPath = base.yamlPath.startsWith('/') ? base.yamlPath : `/${base.yamlPath}`
+    const fileChanges = base.fileChanges.map(f =>
+      f.repositoryId === base.repositoryId && f.path === normalizedYamlPath
+        ? { ...f, optimizedContent: aiResult.optimizedYaml, optimizations, changed: f.originalContent !== aiResult.optimizedYaml }
+        : f
+    )
+
+    res.json({
+      ...base,
+      optimizedYaml: aiResult.optimizedYaml,
+      optimizations,
+      estimatedSavingMinutes: optimizations.reduce((s, o) => s + o.estimatedSavingMinutes, 0),
+      fileChanges,
+      aiMode: true,
+    })
+  } catch (err) { handleError(res, err) }
 })
 
 // GET /api/optimizer/analyze-repo?projectUrl=...

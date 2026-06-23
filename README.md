@@ -1,142 +1,27 @@
 # Vantage
 
-Power Platform and Azure DevOps engineering toolkit — audit active layers, monitor cloud flows, guard option sets, validate deployment readiness, compare environments, monitor pipeline health, and automatically optimize YAML pipelines.
+Power Platform and Azure DevOps engineering toolkit for teams working with Dataverse and Azure DevOps pipelines.
 
----
+## What it does
+
+- **Active Layer Scanner** — find unmanaged customizations that could break a deployment
+- **Option Set Guard** — detect and restore option set values overwritten by solution imports
+- **Deployment Readiness Checker** — 6-check pass/fail report before any Greymatter deployment
+- **Environment Comparison** — diff two Dataverse environments across solutions, flows, variables, and connection refs
+- **Cloud Flow Monitor** — health dashboard, silent trigger detection, connection ref blast radius map
+- **Pipeline Health Dashboard** — success rates, sparklines, flaky detection, error diagnosis with suggested fixes
+- **Pipeline Optimizer** — scans YAML pipelines, applies 29 performance rules, opens a draft PR — up to 11.5 hrs saved per run
 
 ## Download and run
 
-> No VS Code or developer tools required.
+**Requirements:** [Docker Desktop](https://www.docker.com/products/docker-desktop) *(recommended)* or [Node.js 18+](https://nodejs.org). No VS Code or terminal needed.
 
-### Step 1 — Download
+1. Go to [**Releases**](../../releases/latest) and download the latest `vantage-vX.X.X.zip` — or use **Code → Download ZIP** above
+2. Extract the zip anywhere on your machine
+3. Double-click **`Start Vantage.bat`**
+4. Vantage opens in your browser and walks you through entering your credentials — you only do this once
 
-Go to the [**Releases**](../../releases/latest) page and download the latest `vantage-vX.X.X.zip`. Extract it anywhere on your machine.
-
-*(Alternatively: clone this repo or use the **Code → Download ZIP** button above.)*
-
-### Step 2 — Add your credentials
-
-Inside the extracted folder, open `backend/.env.example` in Notepad (or any text editor). Fill in your values:
-
-```
-AZURE_TENANT_ID=your-tenant-id
-AZURE_CLIENT_ID=your-client-id
-AZURE_CLIENT_SECRET=your-client-secret
-API_KEY=any-long-random-string-you-make-up
-AZURE_DEVOPS_PAT=your-ado-pat
-```
-
-Save the file as `backend/.env` (remove the `.example` part).
-
-### Step 3 — Start
-
-Double-click **`Start Vantage.bat`**.
-
-- If Docker Desktop is installed, it uses Docker — nothing else needed.
-- If Node.js is installed, it builds and starts with Node.js.
-- First run installs dependencies (~60 seconds). Every run after that starts in seconds.
-
-Vantage opens automatically in your browser at **http://localhost:3001**.
-
----
-
-## Before you start — what you need
-
-- **[Docker Desktop](https://www.docker.com/products/docker-desktop)** *(recommended)* — or **[Node.js 18+](https://nodejs.org)** if you prefer
-- **Azure AD App Registration** credentials (Tenant ID, Client ID, Client Secret) — get these from whoever set up the app
-- The App Registration must be added as an **Application User** in each Dataverse environment you want to scan, with a role that allows read access (e.g. System Administrator)
-- **Azure DevOps PAT** — needed for Features 06 and 07. Generate at Azure DevOps → User Settings → Personal Access Tokens. Required scopes: Build (Read), Code (Read & Write)
-
----
-
-## First-time setup
-
-Do this once when you first clone the repo.
-
-### Step 1 — Install backend dependencies
-
-```
-cd backend
-npm install
-```
-
-### Step 2 — Create the backend config file
-
-In the `backend` folder, create a file called `.env` (no extension, just `.env`).
-
-Paste this into it and fill in the real values:
-
-```
-AZURE_TENANT_ID=paste-your-tenant-id-here
-AZURE_CLIENT_ID=paste-your-client-id-here
-AZURE_CLIENT_SECRET=paste-your-client-secret-here
-API_KEY=generate-a-random-string-here
-AZURE_DEVOPS_PAT=paste-your-pat-here
-```
-
-To generate a random `API_KEY`:
-```
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-> These credentials are never sent to the browser. All external API communication happens in the backend.
-
-### Step 3 — Install frontend dependencies
-
-Open a **new terminal** in the project root:
-
-```
-cd frontend
-npm install
-```
-
-### Step 4 — Create the frontend config file
-
-In the `frontend` folder, create a file called `.env`:
-
-```
-VITE_API_URL=http://localhost:3001
-VITE_API_KEY=same-value-as-backend-API_KEY
-```
-
-> `VITE_API_KEY` must match the `API_KEY` you set in the backend `.env`. Every request the frontend makes is authenticated with this key.
-
----
-
-## Running the app
-
-You need **two terminals open at the same time** — one for the backend, one for the frontend. Both must be running.
-
-**Terminal 1 — start the backend**
-```
-cd backend
-npm run dev
-```
-You should see: `Backend running on http://localhost:3001`
-
-**Terminal 2 — start the frontend**
-```
-cd frontend
-npm run dev
-```
-You should see: `Local: http://localhost:5173`
-
-Then open [http://localhost:5173](http://localhost:5173) in your browser.
-
-> If you close either terminal, the app stops working. Keep both running while you use the tool.
-
----
-
-## When you pull new changes
-
-After running `git pull`, reinstall dependencies before starting the app:
-
-```
-cd backend && npm install
-cd frontend && npm install
-```
-
-You do not need to recreate your `.env` files.
+> First launch takes ~60 seconds to install and build. Every start after that is under 5 seconds.
 
 ---
 
@@ -144,7 +29,7 @@ You do not need to recreate your `.env` files.
 
 ### 01 · Active Layer Scanner
 
-Scans a Dataverse environment and identifies components sitting in the **active layer** — unmanaged customizations that could cause issues during solution export or deployment.
+Scans a Dataverse environment and identifies components in the **active layer** — unmanaged customizations that could cause issues during solution export or deployment.
 
 | Status | Meaning |
 |---|---|
@@ -152,7 +37,7 @@ Scans a Dataverse environment and identifies components sitting in the **active 
 | **Unmanaged** | Component has never been part of any managed solution |
 | **Base Layer** | Clean — fully managed |
 
-Results are searchable, filterable by status, and exportable to CSV. Every scan is saved to local history and accessible from the history tab.
+Results are searchable, filterable by status, and exportable to CSV. Every scan is saved to local history.
 
 ---
 
@@ -160,246 +45,134 @@ Results are searchable, filterable by status, and exportable to CSV. Every scan 
 
 Three tools in one page for protecting option set values that Greymatter deployments routinely overwrite.
 
-**Option Set Guard** — compares live environment values against the pinned client config (`config/clients/andrews.json`) and highlights any drift. Restores overwritten values back to the correct state with one click.
+**Option Set Guard** — compares live environment values against the pinned client config and restores any drift with one click.
 
-**Document vs Dev** — paste a table copied from Microsoft Loop, Excel, Google Sheets, or any TSV-producing app and compare it against the live dev environment. The parser handles blank lines, reversed columns, CRLF line endings, and automatically prefers global option sets over local ones when both are present.
+**Document vs Dev** — paste a table from Microsoft Loop, Excel, Google Sheets, or any TSV-producing app and compare it against the live dev environment. Handles blank lines, reversed columns, CRLF line endings, and automatically prefers global option sets over local ones.
 
-**Environment Comparison** — diff option set values between any two environments side by side, showing which values are different, missing, or extra.
+**Environment Comparison** — diff option set values between any two environments side by side.
 
 ---
 
 ### 03 · Deployment Readiness Checker
 
-Runs 6 automated checks in parallel against a Dataverse environment and produces a single pass/warn/fail report before a Greymatter deployment.
+Runs 6 automated checks in parallel and produces a single pass/warn/fail report before a Greymatter deployment.
 
 | Check | What it validates |
 |---|---|
 | Active Layer | No unmanaged customizations on managed components |
 | Cloud Flows | All required flows are turned on |
-| Solutions | Versions are consistent, no duplicate managed layers |
+| Solutions | Versions consistent, no duplicate managed layers |
 | Environment Variables | All vars have values or defaults |
-| Connection References | All connection refs are connected and healthy |
+| Connection References | All refs connected and healthy |
 | Option Sets | Protected values match the pinned client config |
 
-Includes a **fix preview** — a dry-run endpoint that identifies what can be auto-remediated (disabled flows, missing env var defaults, broken connection refs) and returns a plan for review before anything is changed.
+Includes a fix preview — a dry-run that identifies what can be auto-remediated before anything is changed.
 
 ---
 
 ### 04 · Environment Comparison
 
-Diffs two Dataverse environments side by side across four dimensions:
-
-- **Solutions** — version drift, missing or extra solutions
-- **Environment Variables** — value mismatches, missing vars
-- **Connection References** — status differences, missing refs
-- **Cloud Flows** — on/off state differences, missing flows
-
-Each dimension is a collapsible section with a count badge and a detailed table.
+Diffs two Dataverse environments side by side across solutions, environment variables, connection references, and cloud flows. Each dimension is a collapsible section with counts and a detailed table.
 
 ---
 
 ### 05 · Cloud Flow Monitor
 
-Complete cloud flow visibility without clicking through Power Apps.
+**Flow Health** — every flow's status, last run, trigger type, and connection ref usage.
 
-**Flow Health** — every flow's status, last run time, trigger type, and connection ref usage. Searchable and filterable.
+**Silent Trigger Detection** — flags flows that look enabled but have never fired or haven't triggered in 7+ days.
 
-**Silent Trigger Detection** — flags enabled flows that have never fired or haven't triggered in 7+ days. These are flows that look healthy in the UI but are silently doing nothing.
+**Out of Sync** — compares flow states between two environments.
 
-**Out of Sync** — compares flow states between two environments to surface configuration drift. Shows which flows are on in one environment but off in another.
+**Connection Reference Health Map** — every connection ref, its credential status, and blast radius if it breaks. Includes a dependency graph and per-connection mini chart.
 
-**Connection Reference Health Map** — every connection reference with its live credential status, which flows depend on it, and the blast radius if the connection breaks. Includes a visual dependency graph and per-connection mini blast-radius chart.
-
-**Auto-fix** — for broken Dataverse connection references, finds a healthy donor reference with the same connector type and copies its credential across. Requires explicit confirmation before executing.
+**Auto-fix** — finds a healthy donor reference and copies its credential to a broken one. Requires confirmation before executing.
 
 ---
 
 ### 06 · Pipeline Health Dashboard
 
-Monitors Azure DevOps pipeline runs without leaving Vantage.
+**Overview stats** — total runs, success rate, active pipelines, average duration.
 
-**Overview stats** — total runs, success rate, active pipelines, average duration across the selected time period.
+**Per-pipeline sparklines** — last 10 run outcomes at a glance.
 
-**Per-pipeline sparklines** — inline SVG charts showing the last 10 run outcomes at a glance.
+**Flaky detection** — pipelines alternating pass/fail on the same codebase.
 
-**Flaky detection** — automatically identifies pipelines that alternate between passing and failing on the same codebase, indicating environment or agent instability.
+**Run detail drawer** — failed steps, matching log lines, identified error, and plain-English suggested fix. 22 error patterns covered: npm, TypeScript, .NET/MSBuild, auth, network, disk, Docker, tests, timeout, and more.
 
-**Slowest pipelines** and **Needs Attention** panels highlight where to focus optimization effort.
-
-**Run table** — full list of recent runs with status filter tabs (All / Running / Succeeded / Failed / Cancelled). Click any failed run to open the detail drawer.
-
-**Run detail drawer** — shows each failed step's name, the relevant log lines, and an automatically identified error with a plain-English suggested fix. 22 error patterns are matched:
-
-npm errors · TypeScript errors · .NET / MSBuild errors · missing .NET SDK · authentication failures · insufficient permissions · connection refused · connection timeout · DNS failures · disk full · Docker errors · image not found · test failures · pipeline timeout · file not found · permission denied · command not found · Azure resource not found · non-zero exit codes · and more
-
-**Cancel and Retry** — cancel a running build or re-queue a failed one directly from the drawer, without going to Azure DevOps.
+**Cancel and Retry** — directly from the drawer, without going to Azure DevOps.
 
 ---
 
 ### 07 · Pipeline Optimizer
 
-Analyzes YAML pipelines for performance problems, applies all safe fixes automatically, and creates a draft PR on a new branch. Main is **never** modified.
+Analyzes YAML pipelines, applies safe fixes, and opens a draft PR on a new branch. Main is never touched.
 
-#### Single Pipeline mode
+**Single Pipeline** — pick from list → analyze → apply → draft PR created on `vantage/optimize-{name}`.
 
-Pick any YAML pipeline from the list → click Analyze → review the findings across four stat cards (estimated time saved, number of optimizations, files changed, target branch) → apply. The tool creates branch `vantage/optimize-{pipeline-name}` and opens a draft PR.
+**Entire Repository** — scans all YAML pipelines concurrently, crawls templates across repos, deduplicates shared files, creates one PR per repository.
 
-#### Entire Repository mode
+**29 optimization rules** across checkout settings, Power Platform task flags, artifact task upgrades, dependency caching, tool version upgrades, and parallelism recommendations. Maximum saving: **~11.5 hours per run**.
 
-One click scans every YAML pipeline in the project simultaneously (3 concurrent workers), crawls every template file they reference across all repositories (up to 50 files per pipeline), deduplicates shared template files so they're only changed once, and creates one draft PR per repository with all changes in a single commit.
-
-#### Optimization rules — 29 total
-
-**Checkout:**
-- Shallow clone (`fetchDepth: 1`) — cuts full-history checkout to seconds
-- Remove `clean: true` — stops wiping the workspace on every run
-- Disable LFS (`lfs: false`) — skips binary pointer downloads
-- Disable submodule fetch (`submodules: false`)
-- Set `persistCredentials: false`
-
-**Power Platform (biggest wins for long-running pipelines):**
-- Async solution import (`asyncOperation: true`) — **−90 min** — prevents the agent blocking for the full import duration
-- Async solution export — **−45 min** — prevents connection timeouts on large solution exports
-- Async publish customizations — −20 min
-- Skip import if same version (`skipLowerVersion: true`) — **−60 min** — skips the entire import if nothing changed
-- Import safe flags (`pp-import-fast-safe-flags`) — −20 min
-- Import retry on transient failure — −15 min
-- Cache PAC CLI installation — −15 min
-- Remove unmanaged export step when managed export exists — −10 min
-- Stable solution hash to prevent unnecessary re-imports — −120 min
-- Skip flow toggle when import was skipped — −6 min
-- Deployment control parameters guard — −30 min
-
-**Artifact tasks:**
-- Upgrade `PublishBuildArtifacts@1` → `PublishPipelineArtifact@1` (3–5× faster)
-- Upgrade `DownloadBuildArtifacts@0` → `DownloadPipelineArtifact@2` (2–3× faster)
-
-**Caching:**
-- npm packages via `Cache@2` — −12 min
-- Yarn packages — −12 min
-- NuGet packages — −10 min
-- .NET restore packages — −10 min
-- pip packages — −8 min
-- Maven local repository — −10 min
-- PowerShell modules (Install-Module) — −8 min
-
-**Tool upgrades:**
-- `NuGetToolInstaller@0` → `@1`
-- `UseDotNet@1` → `@2`
-- MSBuild parallel flag (`/m`)
-- VSTest flaky test retry
-
-**Cleanup:**
-- Remove `system.debug: true` — eliminates thousands of verbose log lines
-- Set `timeoutInMinutes` on jobs with no timeout
-
-**Parallelism (manual review recommendations):**
-- Parallelize environment deployment chain — **−360 min** — for sequential PP multi-environment deploys
-- Run independent stages in parallel — −120 min
-
-Maximum possible saving if all rules fire: **~11.5 hours per run**.
-
-#### Branch safety
-
-Seven hard guarantees on every apply:
-1. Will never push to `refs/heads/main`
-2. Target branch must match `OPTIMIZER_TARGET_BRANCH` env var (default: `main`)
-3. Verifies the target branch exists before creating anything
-4. Checks the optimizer branch doesn't already exist
-5. Creates branch and commit in two separate API calls (avoids zero-objectId race)
-6. All PRs are created as drafts — a human must review and merge
-7. Requires `safetyAcknowledged: true` and `createDraftOnly: true` in the POST body
+Branch safety: never pushes to main, always creates draft PRs, verifies branches exist before touching anything.
 
 ---
 
 ## Security
 
-All enforced at the Express layer before any route handler runs:
-
-| Layer | Implementation |
+| Layer | What it does |
 |---|---|
-| HTTP security headers | `helmet` — sets CSP, HSTS, X-Frame-Options, X-Content-Type-Options, etc. |
-| CORS | Only `localhost:*` origins allowed (or explicit `FRONTEND_URL`) |
-| API key auth | Every `/api/*` request requires a valid `X-API-Key` header |
-| Rate limiting | 200 requests per 15 minutes per IP via `express-rate-limit` |
-| Payload size | `express.json({ limit: '100kb' })` |
-| MSAL OAuth2 | Client credentials flow for Dataverse — tokens acquired server-side, never sent to browser |
-| Environment URL validation | Enforces HTTPS and `.dynamics.com` hostname — prevents SSRF |
-| Optimizer path safety | Blocks `..`, bare `/`, and newline characters in repository file paths |
-| Startup check | Server refuses to start if any required env var is missing |
+| Helmet | HTTP security headers — CSP, HSTS, X-Frame-Options, X-Content-Type-Options |
+| CORS | Only `localhost:*` origins accepted |
+| API key | Every `/api/*` request requires a valid `X-API-Key` header |
+| Rate limiting | 200 requests per 15 minutes per IP |
+| Payload limit | 100 kb max request body |
+| MSAL OAuth2 | Dataverse tokens acquired server-side, never sent to the browser |
+| URL validation | Enforces HTTPS and `.dynamics.com` — prevents SSRF |
+| Path safety | Blocks `..`, bare `/`, and newlines in optimizer file paths |
+| Credential storage | Saved to `data/config.json` on disk, never logged or returned to the client |
 
 ---
 
 ## Project structure
 
 ```
-vantage/
+active-layer-auditor/
+├── Start Vantage.bat         One-click launcher (Docker or Node.js)
+├── Dockerfile                Multi-stage Docker build
+├── docker-compose.yml
 ├── backend/
-│   ├── src/
-│   │   ├── index.ts              Express server, security middleware, route wiring
-│   │   ├── auth.ts               MSAL token acquisition + URL validation
-│   │   ├── dataverse.ts          Dataverse API client factory
-│   │   ├── types.ts              Shared TypeScript interfaces
-│   │   ├── db.ts                 JSON-file scan history store
-│   │   ├── optimizer.ts          Pipeline optimizer engine (29 rules, repo scanner)
-│   │   ├── pipelines.ts          Pipeline health + error analysis (22 patterns)
-│   │   ├── readiness.ts          Deployment readiness checks (6 parallel)
-│   │   ├── comparison.ts         Environment comparison logic
-│   │   ├── flows.ts              Cloud flow health + trigger detection
-│   │   ├── optionsets.ts         Option set check + restore
-│   │   ├── connectionrefs.ts     Connection reference health + auto-fix
-│   │   ├── remediation.ts        Auto-fix plan builder
-│   │   ├── pastecompare.ts       TSV paste parser (Loop, Excel, Sheets)
-│   │   ├── loopcompare.ts        Loop document comparison
-│   │   └── routes/               One router file per domain (10 files)
-│   ├── .env                      Your credentials — create this, never commit it
-│   ├── .env.example              Template showing what .env needs
-│   └── package.json
+│   └── src/
+│       ├── index.ts          Express server, middleware, route wiring
+│       ├── config.ts         Credential storage and loading
+│       ├── auth.ts           MSAL token acquisition + URL validation
+│       ├── optimizer.ts      Pipeline optimizer (29 rules, ~1,360 lines)
+│       ├── pipelines.ts      Pipeline health + 22 error patterns
+│       ├── readiness.ts      6-check deployment readiness runner
+│       └── routes/           One file per feature (12 route files)
 ├── frontend/
-│   ├── src/
-│   │   ├── App.tsx               Router + route definitions
-│   │   ├── api.ts                fetch wrapper that attaches API key header
-│   │   ├── pages/                One file per feature page (7 pages)
-│   │   ├── components/           Shared UI components (8 components)
-│   │   └── hooks/                useEnvironmentUrl, useSmoothScroll
-│   ├── .env                      Your frontend config — create this
-│   ├── .env.example              Template
-│   └── package.json
-├── config/
-│   └── clients/                  Per-client option set config JSON files
-└── data/                         Scan history — auto-created, gitignored
+│   └── src/
+│       ├── App.tsx           Router + setup gate
+│       ├── pages/            One file per feature (10 pages)
+│       └── components/       Shared UI components
+├── config/clients/           Per-client option set config JSON files
+└── data/                     Credentials + scan history (auto-created, gitignored)
 ```
 
 ---
 
-## Environment variables reference
+## For developers
 
-**`backend/.env`**
+If you want to run in dev mode with hot reload:
 
-| Variable | Required | Description |
-|---|---|---|
-| `AZURE_TENANT_ID` | Yes | Entra ID / Azure AD tenant ID |
-| `AZURE_CLIENT_ID` | Yes | App Registration client ID |
-| `AZURE_CLIENT_SECRET` | Yes | App Registration client secret |
-| `API_KEY` | Yes | Shared secret for all API requests — generate randomly |
-| `AZURE_DEVOPS_PAT` | For 06 + 07 | ADO Personal Access Token (Build Read + Code Read/Write) |
-| `PORT` | No | Backend port — default `3001` |
-| `FRONTEND_URL` | No | Locks CORS to a specific origin in production |
-| `OPTIMIZER_TARGET_BRANCH` | No | Branch the optimizer is allowed to target — default `main` |
+```
+# Terminal 1
+cd backend && npm install && npm run dev
 
-**`frontend/.env`**
+# Terminal 2
+cd frontend && npm install && npm run dev
+```
 
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_API_URL` | Yes | Backend base URL — e.g. `http://localhost:3001` |
-| `VITE_API_KEY` | Yes | Must match `API_KEY` in backend `.env` |
+Frontend: http://localhost:5173 · Backend: http://localhost:3001
 
----
-
-## How authentication works
-
-**Dataverse (Features 01–05):** The Azure credentials in `backend/.env` are used server-side only. The backend acquires an OAuth2 token from Entra ID using the client credentials flow, then uses that token to call the Dataverse Web API (`/api/data/v9.2`). The frontend never sees the credentials.
-
-**Azure DevOps (Features 06–07):** The `AZURE_DEVOPS_PAT` is base64-encoded per-request into a `Basic` auth header sent directly to `dev.azure.com`. The PAT is stored only in `backend/.env` and is never returned to the browser.
-
-**Frontend → Backend:** Every request from the frontend includes an `X-API-Key` header. The backend validates this against `process.env.API_KEY` before any route handler runs. Requests without a valid key receive `401 Unauthorized`.
+Create `backend/.env` from `backend/.env.example`. The in-app setup wizard also works in dev mode and writes to `data/config.json`.

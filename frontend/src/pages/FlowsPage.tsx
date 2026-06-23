@@ -356,6 +356,28 @@ function TriggerHealthBadge({ triggerHealth, daysSinceLastRun, enabled }: {
 
 function FlowRow({ flow }: { flow: FlowHealth }) {
   const [expanded, setExpanded] = useState(false)
+  const [aiExplain, setAiExplain] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+
+  async function explainError(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!flow.lastRun?.errorMessage) return
+    setAiLoading(true)
+    setAiExplain(null)
+    try {
+      const resp = await apiFetch(`${API_URL}/api/flows/explain-error`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flowName: flow.name, errorMessage: flow.lastRun.errorMessage }),
+      })
+      const json = await resp.json()
+      setAiExplain(json.explanation ?? json.error ?? 'No explanation returned.')
+    } catch {
+      setAiExplain('Failed to get explanation. Check your connection.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   return (
     <>
@@ -417,12 +439,21 @@ function FlowRow({ flow }: { flow: FlowHealth }) {
 
         {/* Last error (inline preview) */}
         <td className="px-4 py-3 max-w-xs">
-          {flow.lastRun?.errorMessage
-            ? <span className="text-xs truncate block" style={{ color: '#fbbf24', maxWidth: '260px' }} title={flow.lastRun.errorMessage}>
+          {flow.lastRun?.errorMessage ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs truncate block" style={{ color: '#fbbf24', maxWidth: '200px' }} title={flow.lastRun.errorMessage}>
                 {flow.lastRun.errorMessage}
               </span>
-            : null
-          }
+              <button
+                onClick={explainError}
+                disabled={aiLoading}
+                className="text-xs px-2 py-0.5 rounded font-medium flex-shrink-0"
+                style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)', cursor: aiLoading ? 'wait' : 'pointer' }}
+              >
+                {aiLoading ? '...' : '✦ Explain'}
+              </button>
+            </div>
+          ) : null}
         </td>
       </tr>
 
@@ -431,6 +462,15 @@ function FlowRow({ flow }: { flow: FlowHealth }) {
         <tr style={{ borderBottom: '1px solid var(--border)' }}>
           <td />
           <td colSpan={7} className="px-4 pb-4 pt-2">
+            {aiExplain && (
+              <div className="mb-3 rounded-lg p-4" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-semibold" style={{ color: '#a78bfa' }}>✦ AI Explanation</span>
+                  <button onClick={() => setAiExplain(null)} className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>✕</button>
+                </div>
+                <p className="text-xs whitespace-pre-wrap" style={{ color: 'var(--text-secondary)', lineHeight: '1.6' }}>{aiExplain}</p>
+              </div>
+            )}
             <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-mid)' }}>
               <div className="px-4 py-2" style={{ backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
                 <span className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>

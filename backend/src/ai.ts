@@ -89,6 +89,36 @@ Return ONLY this JSON (no markdown, no explanation):
 
 Only include a decision if you are confident the stages are truly independent (no shared artifacts, no logical ordering requirement). If unsure, omit it. Stage names must match exactly.`
 
+export async function explainFlowError(flowName: string, errorMessage: string): Promise<string> {
+  const apiKey = process.env.GROQ_API_KEY?.trim()
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set in .env')
+
+  const resp = await axios.post(
+    GROQ_URL,
+    {
+      model: MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a Power Platform expert. When given a cloud flow name and its error message, explain in plain English what went wrong and give 2-3 specific steps to fix it. Be concise and practical. Do not use jargon. Format: one paragraph explaining the cause, then a numbered list of fix steps.`,
+        },
+        {
+          role: 'user',
+          content: `Flow name: ${flowName}\n\nError: ${errorMessage}`,
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 512,
+    },
+    {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 30000,
+    }
+  )
+
+  return resp.data.choices?.[0]?.message?.content ?? 'No explanation returned.'
+}
+
 export async function analyzeWithAI(
   originalYaml: string,
   parallelismHints: { title: string; description: string; estimatedSavingMinutes: number }[]

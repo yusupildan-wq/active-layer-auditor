@@ -2,8 +2,23 @@ import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import { makeDataverseClient, validateEnvironmentUrl } from '../auth'
 import { getFlowHealth, compareFlows } from '../flows'
+import { explainFlowError } from '../ai'
 
 export const flowsRouter = Router()
+
+// POST /api/flows/explain-error
+flowsRouter.post('/explain-error', async (req: Request, res: Response) => {
+  const { flowName, errorMessage } = req.body
+  if (!flowName || !errorMessage) {
+    res.status(400).json({ error: 'flowName and errorMessage are required' }); return
+  }
+  try {
+    const explanation = await explainFlowError(flowName, errorMessage)
+    res.json({ explanation })
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed' })
+  }
+})
 
 flowsRouter.get('/compare', async (req: Request, res: Response) => {
   const { sourceUrl, targetUrl } = req.query

@@ -188,7 +188,7 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
         setSaving(false)
         return
       }
-      setStep(3)
+      setStep(4)
     } catch {
       setError('Could not reach the backend. Try closing and re-opening Vantage.')
       setSaving(false)
@@ -229,8 +229,8 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
         {step === 1 && (
           <>
             <div className="flex items-center justify-between mb-6">
-              <StepDots current={1} total={2} />
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Step 1 of 2</span>
+              <StepDots current={1} total={3} />
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Step 1 of 3</span>
             </div>
 
             <h1 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -284,8 +284,68 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
         {step === 2 && (
           <>
             <div className="flex items-center justify-between mb-6">
-              <StepDots current={2} total={2} />
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Step 2 of 2</span>
+              <StepDots current={2} total={3} />
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Step 2 of 3</span>
+            </div>
+
+            <h1 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+              Grant Dataverse Access
+            </h1>
+            <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              Your app registration needs permission to read your Power Platform environments. This is a one-time step your admin can do in 2 minutes.
+            </p>
+
+            <div className="rounded-lg p-4 mb-5 space-y-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-mid)' }}>
+              {[
+                { n: 1, text: 'Go to', link: 'https://admin.powerplatform.microsoft.com', linkText: 'admin.powerplatform.microsoft.com' },
+                { n: 2, text: 'Select the environment you want to connect → click Settings (top bar)' },
+                { n: 3, text: 'Go to Users + permissions → Application users' },
+                { n: 4, text: 'Click "New app user" → search for your app by the Client ID you entered in Step 1 → select it' },
+                { n: 5, text: 'Assign the "System Administrator" security role → click Create' },
+                { n: 6, text: 'Repeat for each environment you want Vantage to access' },
+              ].map(s => (
+                <div key={s.n} className="flex gap-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style={{ backgroundColor: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
+                    {s.n}
+                  </span>
+                  <span className="leading-relaxed pt-0.5">
+                    {s.text}{' '}
+                    {'link' in s && (
+                      <a href={s.link} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: '#a5b4fc' }}>{s.linkText}</a>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg px-4 py-3 text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#fbbf24' }}>
+              ⚠ If you skip this, Vantage will open but all features will return a "403 Forbidden" error. You can always do this later.
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                className="py-2.5 px-4 rounded-lg text-sm font-medium"
+                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                onClick={() => setStep(1)}
+              >
+                ← Back
+              </button>
+              <button
+                className="flex-1 py-2.5 rounded-lg text-sm font-medium"
+                style={{ backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer' }}
+                onClick={() => setStep(3)}
+              >
+                Done, continue →
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <StepDots current={3} total={3} />
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Step 3 of 3</span>
             </div>
 
             <h1 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -319,7 +379,7 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
               <button
                 className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all"
                 style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-                onClick={() => { setStep(1); setError('') }}
+                onClick={() => { setStep(2); setError('') }}
               >
                 ← Back
               </button>
@@ -347,7 +407,7 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
           </>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div className="flex flex-col items-center text-center py-4">
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center mb-4"

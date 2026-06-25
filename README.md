@@ -30,7 +30,7 @@
 | **Environment Comparison** | Diffs two Dataverse environments across solutions, flows, variables, and connection references |
 | **Cloud Flow Monitor** | Flow health dashboard, silent trigger detection, connection ref blast radius map with auto-fix |
 | **Pipeline Health** | Azure DevOps run history, sparklines, flaky detection, error pattern matching with suggested fixes, cancel/retry |
-| **Pipeline Optimizer** | Scans YAML pipelines, applies 29 performance rules, opens a draft PR — up to **11.5 hours saved per run** |
+| **Pipeline Optimizer** | Scans YAML pipelines with 47 performance rules, applies safe fixes, and opens a draft PR |
 
 ---
 
@@ -170,23 +170,23 @@ Error patterns covered: npm (peer deps, network, missing scripts) · TypeScript 
 
 ### 07 · Pipeline Optimizer
 
-Analyzes Azure DevOps YAML pipelines against 29 performance rules, applies all safe fixes in-place, and opens a draft PR. `refs/heads/main` is never touched.
+Analyzes Azure DevOps YAML pipelines against 47 performance rules, applies safe fixes in-place, and opens a draft PR. `refs/heads/main` is never touched.
 
 **Single Pipeline mode** — select a definition → analyze → view findings with per-rule time estimates → apply → draft PR opened on `vantage/optimize-{name}`.
 
 **Entire Repository mode** — scans every YAML pipeline concurrently (limit 3 parallel workers), crawls all referenced template files across repositories (up to 50 files per pipeline, recursive), deduplicates shared template files so each is only modified once, and creates one draft PR per repository containing all changes in a single commit.
 
-**29 rules across 5 categories:**
+**47 rules across 5 optimization areas:**
 
-| Category | Example rules | Max saving |
-|---|---|---|
-| Checkout | Shallow clone, disable LFS, remove clean | −41 min |
-| Power Platform | Async import/export, skip same version, stable hash | **−386 min** |
-| Artifacts | Upgrade to pipeline artifacts v2 | −18 min |
-| Caching | npm, NuGet, pip, Maven, PowerShell modules | −70 min |
-| Parallelism | Parallel env deploy chain, parallel stages | **−480 min** |
+| Area | Example rules |
+|---|---|
+| Checkout | Shallow/partial clone, disable tags and LFS, sparse checkout review |
+| Power Platform | Async import/export, skip unchanged solutions, stable hash |
+| Build and artifacts | Selective downloads, modern artifact tasks, avoid duplicate restore/build |
+| Caching and execution | npm, NuGet, pip, Maven, PowerShell modules, CI batching and path filters |
+| Parallelism | Parallel environment stages, build/test concurrency, test sharding |
 
-**Maximum combined saving: ~11.5 hours per run.**
+Savings are calculated per finding. The largest gains come from eliminating unnecessary runs and work, then parallelizing the remaining independent stages.
 
 Branch safety: verifies target branch exists, checks optimizer branch doesn't already exist, creates branch and commit in separate API calls, all PRs are drafts, requires explicit `safetyAcknowledged` flag in the request body.
 
@@ -223,7 +223,7 @@ active-layer-auditor/
 │       ├── index.ts          Express server — security middleware, route wiring, static serving
 │       ├── config.ts         Credential load/save/apply, pkg-aware data directory
 │       ├── auth.ts           MSAL token acquisition, environment URL validation
-│       ├── optimizer.ts      Pipeline optimizer engine (~1,360 lines, 29 rules)
+│       ├── optimizer.ts      Pipeline optimizer engine (47 rules)
 │       ├── pipelines.ts      Pipeline health aggregation, 22 error pattern matchers
 │       ├── readiness.ts      6-check parallel readiness runner
 │       ├── flows.ts          Cloud flow health + silent trigger detection

@@ -478,6 +478,7 @@ export default function OptimizerPage() {
                     }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = aiMode ? '#7c3aed' : 'rgba(167,139,250,0.15)' }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = aiMode ? '#6d28d9' : 'rgba(167,139,250,0.08)' }}
+                    title="AI mode keeps every rule-engine finding and adds dependency-aware stage parallelism decisions"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
@@ -527,7 +528,7 @@ export default function OptimizerPage() {
             <div>
               <p className="text-sm font-semibold" style={{ color: '#a78bfa' }}>AI is analyzing the pipeline…</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                Reading YAML, identifying dependencies, rewriting parallelism. This takes 30–90 seconds.
+                Running the full rule engine, then using AI to validate and apply additional stage parallelism. This takes 30–90 seconds.
               </p>
             </div>
           </div>

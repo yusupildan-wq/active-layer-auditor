@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import { listDefinitions, fetchAndAnalyze, createOptimizationPRSafely, analyzeRepository, createRepoOptimizationPRs } from '../optimizer'
-import { analyzeWithAI } from '../ai'
+import { analyzeWithAI, mergeAIOptimizations } from '../ai'
 import { recordAuditEvent } from '../audit'
 
 export const optimizerRouter = Router()
@@ -125,9 +125,10 @@ optimizerRouter.get('/ai-analyze', async (req: Request, res: Response) => {
     // so the final result stacks AI parallelism ON TOP of rule engine fixes
     const aiResult = await analyzeWithAI(base.optimizedYaml, parallelismHints)
 
-    // Merge: rule engine non-parallelism changes + AI parallelism changes
-    const ruleEngineChanges = base.optimizations.filter(o => o.category !== 'parallelism')
-    const allOptimizations = [...ruleEngineChanges, ...aiResult.changes]
+    // AI augments the complete rule-engine baseline. Confirmed parallelism changes
+    // are kept as AI findings without double-counting the baseline estimate.
+    const merged = mergeAIOptimizations(base.optimizations, aiResult.changes)
+    const allOptimizations = merged.optimizations
 
     const normalizedYamlPath = base.yamlPath.startsWith('/') ? base.yamlPath : `/${base.yamlPath}`
     const fileChanges = base.fileChanges.map(f =>
@@ -140,7 +141,7 @@ optimizerRouter.get('/ai-analyze', async (req: Request, res: Response) => {
       ...base,
       optimizedYaml: aiResult.optimizedYaml,
       optimizations: allOptimizations,
-      estimatedSavingMinutes: allOptimizations.reduce((s, o) => s + o.estimatedSavingMinutes, 0),
+      estimatedSavingMinutes: merged.estimatedSavingMinutes,
       fileChanges,
       aiMode: true,
     })

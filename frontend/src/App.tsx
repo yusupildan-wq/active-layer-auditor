@@ -38,8 +38,8 @@ function BackendBanner() {
       }}
     >
       {status === 'checking'
-        ? 'Connecting to backend…'
-        : 'Backend unreachable. Double-click Start Vantage.bat to start it, or run: cd backend → npm run dev'}
+        ? 'Connecting…'
+        : 'Vantage could not start. Try closing this window and double-clicking vantage.exe again.'}
     </div>
   )
 }

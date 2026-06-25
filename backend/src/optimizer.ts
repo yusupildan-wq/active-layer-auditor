@@ -442,6 +442,16 @@ type Rule = Optimization & {
 }
 
 const RECOMMENDATION_ONLY = new Set([
+  'checkout-partial-clone',
+  'checkout-sparse',
+  'ci-trigger-batching',
+  'ci-path-filters',
+  'artifact-selective-download',
+  'npm-ci-lockfile',
+  'dotnet-build-no-restore',
+  'dotnet-test-no-build',
+  'vstest-parallel',
+  'parallel-test-sharding',
   'pp-remove-unmanaged-export',
   'pp-stable-solution-hash',
   'pp-skip-flow-toggle-when-import-skipped',
@@ -506,6 +516,39 @@ const RULES: Rule[] = [
     confidence: 'medium',
     detect: (y) => /checkout:\s*self/m.test(y) && !/persistCredentials/i.test(y),
     apply: (y) => injectCheckoutProp(y, 'persistCredentials', 'false'),
+  },
+  {
+    id: 'checkout-fetch-tags',
+    title: 'Disable Git tag synchronization (fetchTags: false)',
+    description: 'Azure Pipelines can fetch every tag and every object referenced by those tags even during a shallow clone. Disabling tag synchronization keeps checkout small unless the build explicitly reads Git tags.',
+    category: 'speed',
+    estimatedSavingMinutes: 8,
+    confidence: 'medium',
+    detect: (y) => /checkout:\s*self/m.test(y) && !/fetchTags/i.test(y) && !/(?:git\s+describe|git\s+tag|GitVersion)/i.test(y),
+    apply: (y) => injectCheckoutProp(y, 'fetchTags', 'false'),
+  },
+  {
+    id: 'checkout-partial-clone',
+    title: 'Use a blobless partial clone for large repositories',
+    description: 'Azure Pipelines supports fetchFilter: blob:none, which avoids transferring file contents that Git never needs to materialize. This is especially valuable for large repositories, but agent and Git versions should be verified before enabling it.',
+    category: 'speed',
+    estimatedSavingMinutes: 10,
+    confidence: 'medium',
+    detect: (y) => /checkout:\s*self/m.test(y) && !/fetchFilter/i.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'checkout-sparse',
+    title: 'Use sparse checkout for monorepo pipelines',
+    description: 'If this pipeline consumes only a few repository directories, sparseCheckoutDirectories or sparseCheckoutPatterns can avoid materializing the rest of a monorepo. Directory selection requires repository-specific review.',
+    category: 'speed',
+    estimatedSavingMinutes: 15,
+    confidence: 'low',
+    detect: (y) =>
+      /checkout:\s*self/m.test(y) &&
+      !/sparseCheckout(?:Directories|Patterns)/i.test(y) &&
+      /(?:workingDirectory|projects?|solution|path):\s*['"]?[\w.-]+[\\/][\w./\\-]+/i.test(y),
+    apply: (y) => y,
   },
 
   // ── Power Platform async (biggest wins for long PP pipelines) ────────────
@@ -633,6 +676,16 @@ const RULES: Rule[] = [
     confidence: 'high',
     detect: (y) => /DownloadBuildArtifacts@0/i.test(y),
     apply: (y) => y.replace(/DownloadBuildArtifacts@0/gi, 'DownloadPipelineArtifact@2'),
+  },
+  {
+    id: 'artifact-selective-download',
+    title: 'Download only required artifact files',
+    description: 'DownloadPipelineArtifact defaults to the ** pattern, which transfers every file. Restricting itemPattern/patterns to the files consumed by the job can substantially reduce network and extraction time for large artifacts.',
+    category: 'speed',
+    estimatedSavingMinutes: 12,
+    confidence: 'low',
+    detect: (y) => /DownloadPipelineArtifact@2/i.test(y) && !/(?:itemPattern|patterns):/i.test(y),
+    apply: (y) => y,
   },
 
   // ── Caching ──────────────────────────────────────────────────────────────
@@ -802,6 +855,86 @@ const RULES: Rule[] = [
       ].join('\n')
       return y.replace(/^([ \t]*-[ \t]*(?:task:[ \t]*PowerShell|script:|pwsh:))/im, `${block}$1`)
     },
+  },
+
+  // ── Avoid redundant build and test work ───────────────────────────────────
+  {
+    id: 'ci-trigger-batching',
+    title: 'Batch rapid CI pushes into one pipeline run',
+    description: 'For busy branches, trigger.batch: true waits for the active run to finish and combines all newer commits into one follow-up run. This reduces duplicate builds and frees agents for the most recent code.',
+    category: 'cleanup',
+    estimatedSavingMinutes: 30,
+    confidence: 'medium',
+    detect: (y) =>
+      /^trigger:\s*$/m.test(y) &&
+      !/^[ \t]+batch:\s*true\s*$/mi.test(y) &&
+      !/^trigger:\s*none\s*$/mi.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'ci-path-filters',
+    title: 'Add CI path filters to skip unrelated changes',
+    description: 'A pipeline should not run when only unrelated documentation, tooling, or another application changes. Trigger path filters can prevent entire unnecessary runs, but the include/exclude paths must match the repository structure.',
+    category: 'cleanup',
+    estimatedSavingMinutes: 45,
+    confidence: 'low',
+    detect: (y) =>
+      /^trigger:/m.test(y) &&
+      !/^[ \t]+paths:\s*$/mi.test(y) &&
+      /(?:(?:workingDirectory|projects?|solution|path):\s*['"]?[\w.-]+[\\/][\w./\\-]+|(?:dotnet|npm|yarn|pnpm)\b[^\n]*[\\/][\w./\\-]+)/i.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'npm-ci-lockfile',
+    title: 'Use npm ci for locked, repeatable installs',
+    description: 'When package-lock.json is committed, npm ci skips dependency resolution and installs the exact lockfile graph. It is generally faster and more deterministic than npm install, but the lockfile must already be synchronized.',
+    category: 'speed',
+    estimatedSavingMinutes: 5,
+    confidence: 'medium',
+    detect: (y) => /\bnpm\s+install\b/i.test(y) && /package-lock\.json/i.test(y) && !/\bnpm\s+ci\b/i.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'dotnet-build-no-restore',
+    title: 'Skip duplicate restore during dotnet build',
+    description: 'If the pipeline already runs dotnet restore, later dotnet build commands can use --no-restore to avoid resolving the same dependency graph again. Job boundaries must be checked before applying.',
+    category: 'speed',
+    estimatedSavingMinutes: 5,
+    confidence: 'medium',
+    detect: (y) => /\bdotnet\s+restore\b/i.test(y) && /\bdotnet\s+build\b(?![^\n]*--no-restore)/i.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'dotnet-test-no-build',
+    title: 'Skip duplicate build during dotnet test',
+    description: 'If the same job already builds the test projects, dotnet test --no-build avoids compiling them again. The optimizer leaves this for review because builds in another job may not share the same workspace.',
+    category: 'speed',
+    estimatedSavingMinutes: 8,
+    confidence: 'medium',
+    detect: (y) => /\bdotnet\s+build\b/i.test(y) && /\bdotnet\s+test\b(?![^\n]*--no-build)/i.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'vstest-parallel',
+    title: 'Run VSTest assemblies in parallel',
+    description: 'VSTest can distribute test assemblies across available cores with runInParallel: true. This can sharply reduce large test suites, but tests that share state should be isolated first.',
+    category: 'parallelism',
+    estimatedSavingMinutes: 15,
+    confidence: 'medium',
+    detect: (y) => /VSTest@\d+/i.test(y) && !/runInParallel:\s*true/i.test(y),
+    apply: (y) => y,
+  },
+  {
+    id: 'parallel-test-sharding',
+    title: 'Shard long test suites across parallel jobs',
+    description: 'Large EasyRepro, integration, Playwright, Cypress, Jest, or dotnet test suites can be split by assembly, project, browser, or test group and run as parallel jobs. The shard boundaries require pipeline-specific test knowledge.',
+    category: 'parallelism',
+    estimatedSavingMinutes: 30,
+    confidence: 'low',
+    detect: (y) =>
+      /(?:VSTest@\d+|\bdotnet\s+test\b|\bnpm\s+(?:run\s+)?test\b|playwright|cypress|EasyRepro)/i.test(y) &&
+      !/(?:strategy:\s*\n[ \t]+(?:matrix|parallel)|shard|splitTests|distributionBatchType)/i.test(y),
+    apply: (y) => y,
   },
 
   // ── Tool version upgrades ────────────────────────────────────────────────
@@ -984,7 +1117,7 @@ const RULES: Rule[] = [
   },
 ]
 
-function applyRules(yaml: string): { optimizations: Optimization[]; optimizedYaml: string } {
+export function applyRules(yaml: string): { optimizations: Optimization[]; optimizedYaml: string } {
   const applicable = RULES.filter(r => r.detect(yaml))
   let optimizedYaml = yaml
   for (const rule of applicable) {

@@ -17,6 +17,38 @@ export interface AIOptimizationResult {
   changes: AIChange[]
 }
 
+export interface OptimizationLike extends AIChange {}
+
+export interface MergedAIOptimizations {
+  optimizations: AIChange[]
+  estimatedSavingMinutes: number
+}
+
+export function mergeAIOptimizations(
+  baseOptimizations: OptimizationLike[],
+  aiChanges: AIChange[]
+): MergedAIOptimizations {
+  const baseTotal = baseOptimizations.reduce((sum, item) => sum + item.estimatedSavingMinutes, 0)
+  const hasRuleParallelismBaseline = baseOptimizations.some(item => item.category === 'parallelism')
+
+  // AI decisions usually confirm and safely apply a parallelism opportunity that the
+  // rule engine already estimated. Keep the original finding so AI mode never loses
+  // baseline coverage, but do not count the same saving twice.
+  const normalizedAIChanges = aiChanges.map(change => ({
+    ...change,
+    title: `AI confirmed: ${change.title}`,
+    description: hasRuleParallelismBaseline
+      ? `${change.description} The estimated saving is already included in the rule-engine parallelism baseline.`
+      : change.description,
+    estimatedSavingMinutes: hasRuleParallelismBaseline ? 0 : change.estimatedSavingMinutes,
+  }))
+
+  return {
+    optimizations: [...baseOptimizations, ...normalizedAIChanges],
+    estimatedSavingMinutes: baseTotal + normalizedAIChanges.reduce((sum, item) => sum + item.estimatedSavingMinutes, 0),
+  }
+}
+
 interface ParallelDecision {
   stage: string
   removeDependsOn: string[]
@@ -172,7 +204,9 @@ export async function analyzeWithAI(
     id: `ai-parallel-${i + 1}`,
     title: `Parallelize ${d.stage}`,
     description: d.reason,
-    estimatedSavingMinutes: typeof d.savingMinutes === 'number' ? d.savingMinutes : 30,
+    estimatedSavingMinutes: typeof d.savingMinutes === 'number'
+      ? Math.max(0, Math.min(720, d.savingMinutes))
+      : 30,
     confidence: 'high' as const,
     category: 'parallelism' as const,
   }))

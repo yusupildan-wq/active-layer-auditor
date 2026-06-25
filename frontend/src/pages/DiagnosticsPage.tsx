@@ -3,6 +3,8 @@ import { apiFetch, API_URL } from '../api'
 import { DiagnosticCheck, DiagnosticsReport, DiagnosticStatus } from '../types'
 
 type LoadState = 'loading' | 'ready' | 'error'
+type TestState = 'idle' | 'running' | 'done'
+interface TestResult { name: string; status: 'pass' | 'fail'; message: string }
 
 const STATUS_STYLE: Record<DiagnosticStatus, { label: string; color: string; bg: string; border: string }> = {
   pass: { label: 'Pass', color: '#4ade80', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.22)' },
@@ -39,6 +41,9 @@ export default function DiagnosticsPage() {
   const [report, setReport] = useState<DiagnosticsReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [environmentUrl, setEnvironmentUrl] = useState('')
+  const [testState, setTestState] = useState<TestState>('idle')
+  const [testResults, setTestResults] = useState<TestResult[]>([])
+  const [testUrl, setTestUrl] = useState('')
 
   const grouped = useMemo(() => {
     const groups = new Map<DiagnosticCheck['category'], DiagnosticCheck[]>()
@@ -65,6 +70,24 @@ export default function DiagnosticsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not connect to backend')
       setState('error')
+    }
+  }
+
+  async function runConnectionTest() {
+    setTestState('running')
+    setTestResults([])
+    try {
+      const resp = await apiFetch(`${API_URL}/api/diagnostics/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ environmentUrl: testUrl.trim() || undefined }),
+      })
+      const data = await resp.json()
+      setTestResults(data.results ?? [])
+    } catch {
+      setTestResults([{ name: 'Connection Test', status: 'fail', message: 'Could not reach backend' }])
+    } finally {
+      setTestState('done')
     }
   }
 
@@ -146,6 +169,58 @@ export default function DiagnosticsPage() {
             </button>
           </div>
         </form>
+
+        {/* Live connection test */}
+        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="px-5 py-3.5 flex items-center justify-between" style={{ backgroundColor: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <h2 className="font-display text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Live Connection Test</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Makes real API calls to verify your credentials and write permissions</p>
+            </div>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <div className="flex gap-3">
+              <input
+                type="url"
+                placeholder="https://yourorg.crm.dynamics.com (required for Dataverse tests)"
+                value={testUrl}
+                onChange={e => setTestUrl(e.target.value)}
+                className="flex-1 rounded-lg px-3 py-2.5 text-sm outline-none"
+                style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-mid)', color: 'var(--text-primary)' }}
+              />
+              <button
+                onClick={runConnectionTest}
+                disabled={testState === 'running'}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+                style={{ backgroundColor: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc', cursor: testState === 'running' ? 'wait' : 'pointer' }}
+              >
+                {testState === 'running' ? 'Testing…' : '▶ Run Test'}
+              </button>
+            </div>
+            {testResults.length > 0 && (
+              <div className="space-y-2">
+                {testResults.map(r => (
+                  <div key={r.name} className="flex items-start gap-3 rounded-lg px-4 py-3" style={{ backgroundColor: 'var(--bg-elevated)' }}>
+                    <span
+                      className="flex-shrink-0 text-xs font-bold px-2 py-0.5 rounded-full mt-0.5"
+                      style={{
+                        color: r.status === 'pass' ? '#4ade80' : '#f87171',
+                        backgroundColor: r.status === 'pass' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                        border: `1px solid ${r.status === 'pass' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                      }}
+                    >
+                      {r.status === 'pass' ? 'Pass' : 'Fail'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{r.name}</p>
+                      <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{r.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {state === 'error' && error && (
           <div

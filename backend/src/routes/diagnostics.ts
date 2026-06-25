@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
-import { validateEnvironmentUrl } from '../auth'
+import axios from 'axios'
+import { validateEnvironmentUrl, makeDataverseClient } from '../auth'
 
 export const diagnosticsRouter = Router()
 
@@ -147,6 +148,67 @@ function getAuditLogCheck(): DiagnosticCheck {
     }
   }
 }
+
+// POST /api/diagnostics/test-connection — makes real API calls to verify credentials work
+diagnosticsRouter.post('/test-connection', async (req, res) => {
+  const { environmentUrl } = req.body
+  const results: { name: string; status: 'pass' | 'fail'; message: string }[] = []
+
+  // Test Dataverse read
+  if (environmentUrl) {
+    try {
+      validateEnvironmentUrl(environmentUrl)
+      const client = await makeDataverseClient(environmentUrl)
+      const whoami = await client.get('/WhoAmI()')
+      const userId = whoami.data?.UserId
+      results.push({ name: 'Dataverse Read', status: 'pass', message: `Connected — User ID ${userId}` })
+
+      // Test Dataverse write by checking the user's security roles
+      try {
+        const rolesResp = await client.get(`/systemusers(${userId})/systemuserroles_association?$select=name`)
+        const roles: string[] = (rolesResp.data?.value ?? []).map((r: any) => r.name)
+        const hasWrite = roles.some(r => r.toLowerCase().includes('administrator') || r.toLowerCase().includes('service writer') || r.toLowerCase().includes('system customizer'))
+        results.push({
+          name: 'Dataverse Write Permission',
+          status: hasWrite ? 'pass' : 'fail',
+          message: hasWrite
+            ? `Write-capable role found: ${roles.find(r => r.toLowerCase().includes('administrator') || r.toLowerCase().includes('service writer') || r.toLowerCase().includes('system customizer'))}`
+            : `No write role detected. Roles: ${roles.join(', ') || 'none'}. Add System Administrator role in Power Platform Admin Center.`,
+        })
+      } catch {
+        results.push({ name: 'Dataverse Write Permission', status: 'fail', message: 'Could not retrieve security roles — app user may not be registered in this environment' })
+      }
+    } catch (err) {
+      const msg = axios.isAxiosError(err)
+        ? (err.response?.status === 401 ? 'Invalid credentials — check Tenant ID, Client ID, and Secret' : err.response?.status === 403 ? 'Access denied — app is not registered as an application user in this environment' : err.message)
+        : (err instanceof Error ? err.message : 'Connection failed')
+      results.push({ name: 'Dataverse Read', status: 'fail', message: msg })
+      results.push({ name: 'Dataverse Write Permission', status: 'fail', message: 'Skipped — fix read access first' })
+    }
+  } else {
+    results.push({ name: 'Dataverse Read', status: 'fail', message: 'No environment URL provided' })
+    results.push({ name: 'Dataverse Write Permission', status: 'fail', message: 'No environment URL provided' })
+  }
+
+  // Test Azure DevOps PAT
+  const pat = process.env.AZURE_DEVOPS_PAT?.trim()
+  if (pat) {
+    try {
+      const resp = await axios.get('https://app.vssps.visualstudio.com/_apis/accounts?memberId=me&api-version=6.0', {
+        headers: { Authorization: `Basic ${Buffer.from(`:${pat}`).toString('base64')}` },
+        timeout: 10000,
+      })
+      const orgs = resp.data?.value?.length ?? 0
+      results.push({ name: 'Azure DevOps PAT', status: 'pass', message: `Valid — ${orgs} organisation(s) accessible` })
+    } catch (err) {
+      results.push({ name: 'Azure DevOps PAT', status: 'fail', message: axios.isAxiosError(err) && err.response?.status === 401 ? 'PAT is invalid or expired' : 'Could not reach Azure DevOps' })
+    }
+  } else {
+    results.push({ name: 'Azure DevOps PAT', status: 'fail', message: 'PAT not configured — pipeline features will not work' })
+  }
+
+  res.json({ results })
+})
 
 diagnosticsRouter.get('/', (req, res) => {
   const checks: DiagnosticCheck[] = [

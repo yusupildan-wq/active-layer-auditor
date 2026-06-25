@@ -10,10 +10,9 @@ interface FormData {
 }
 
 function Field({
-  label, hint, value, onChange, type = 'text', placeholder, show, onToggleShow,
+  label, value, onChange, type = 'text', placeholder, show, onToggleShow,
 }: {
   label: string
-  hint?: string
   value: string
   onChange: (v: string) => void
   type?: 'text' | 'password'
@@ -56,11 +55,6 @@ function Field({
           </button>
         )}
       </div>
-      {hint && (
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-          {hint}
-        </p>
-      )}
     </div>
   )
 }
@@ -79,6 +73,81 @@ function StepDots({ current, total }: { current: number; total: number }) {
           }}
         />
       ))}
+    </div>
+  )
+}
+
+function HowToGuide({ type }: { type: 'azure' | 'devops' }) {
+  const [open, setOpen] = useState(false)
+
+  const azureSteps = [
+    { n: 1, text: 'Go to', link: 'https://portal.azure.com', linkText: 'portal.azure.com' },
+    { n: 2, text: 'In the search bar at the top, type "App registrations" and click it' },
+    { n: 3, text: 'Click "New registration" → give it any name (e.g. "Vantage") → click Register' },
+    { n: 4, text: 'On the overview page, copy the "Application (client) ID" → paste it into Client ID above' },
+    { n: 5, text: 'Also on the overview page, copy the "Directory (tenant) ID" → paste it into Tenant ID above' },
+    { n: 6, text: 'In the left menu click "Certificates & secrets" → "New client secret" → give it any description → Add' },
+    { n: 7, text: 'Copy the "Value" column (not Secret ID) → paste it into Client Secret above. ⚠ You can only see this value once.' },
+    { n: 8, text: 'Finally, ask your Azure admin to grant this app "Dataverse user" permissions on your environments.' },
+  ]
+
+  const devopsSteps = [
+    { n: 1, text: 'Go to', link: 'https://dev.azure.com', linkText: 'dev.azure.com' },
+    { n: 2, text: 'Click your profile picture in the top right → Personal Access Tokens' },
+    { n: 3, text: 'Click "New Token" → give it any name → set expiration as needed' },
+    { n: 4, text: 'Under Scopes, select: Build → Read, Code → Read & Write, then click Create' },
+    { n: 5, text: 'Copy the token value → paste it above. ⚠ You can only see this value once.' },
+  ]
+
+  const steps = type === 'azure' ? azureSteps : devopsSteps
+
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-mid)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-white/5"
+        style={{ backgroundColor: 'var(--bg-elevated)' }}
+      >
+        <span className="text-xs font-medium" style={{ color: '#a78bfa' }}>
+          ✦ {type === 'azure' ? "I don't have these — show me how to get them" : "Show me how to create a Personal Access Token"}
+        </span>
+        <svg
+          className="w-3.5 h-3.5 transition-transform"
+          style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'rotate(0)' }}
+          fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="px-4 py-3 space-y-2.5" style={{ borderTop: '1px solid var(--border)' }}>
+          {steps.map(s => (
+            <div key={s.n} className="flex gap-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <span
+                className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                style={{ backgroundColor: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}
+              >
+                {s.n}
+              </span>
+              <span className="leading-relaxed pt-0.5">
+                {s.text}{' '}
+                {'link' in s && (
+                  <a
+                    href={s.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                    style={{ color: '#a5b4fc' }}
+                  >
+                    {s.linkText}
+                  </a>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -121,7 +190,7 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
       }
       setStep(3)
     } catch {
-      setError('Could not reach the backend. Make sure Vantage is running.')
+      setError('Could not reach the backend. Try closing and re-opening Vantage.')
       setSaving(false)
     }
   }
@@ -134,9 +203,7 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
       {/* Ambient glow */}
       <div
         className="pointer-events-none fixed inset-0"
-        style={{
-          background: 'radial-gradient(ellipse 60% 40% at 50% 20%, rgba(99,102,241,0.06), transparent)',
-        }}
+        style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 20%, rgba(99,102,241,0.06), transparent)' }}
       />
 
       {/* Logo */}
@@ -152,12 +219,8 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
       {/* Card */}
       <div
         className="relative w-full max-w-md rounded-2xl p-8"
-        style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border)',
-        }}
+        style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}
       >
-        {/* Top accent line */}
         <div
           className="absolute top-0 left-8 right-8 h-px"
           style={{ background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent)' }}
@@ -174,27 +237,24 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
               Connect to Azure
             </h1>
             <p className="text-sm mb-6 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Vantage uses an Azure App Registration to access your Dataverse environments. These credentials stay on your machine — they are never sent anywhere else.
+              Vantage needs read access to your Microsoft environment. These credentials stay on your machine only — nothing is sent to any external server.
             </p>
 
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-5 mb-5">
               <Field
-                label="Azure Tenant ID"
-                hint="Azure Portal → Azure Active Directory → Overview → Tenant ID"
+                label="Tenant ID"
                 value={form.tenantId}
                 onChange={set('tenantId')}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
               />
               <Field
-                label="Client ID (Application ID)"
-                hint="Azure Portal → App registrations → your app → Application (client) ID"
+                label="Client ID"
                 value={form.clientId}
                 onChange={set('clientId')}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
               />
               <Field
                 label="Client Secret"
-                hint="Azure Portal → App registrations → your app → Certificates & secrets"
                 value={form.clientSecret}
                 onChange={set('clientSecret')}
                 type="password"
@@ -204,8 +264,10 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
               />
             </div>
 
+            <HowToGuide type="azure" />
+
             <button
-              className="mt-8 w-full py-2.5 rounded-lg text-sm font-medium transition-all"
+              className="mt-6 w-full py-2.5 rounded-lg text-sm font-medium transition-all"
               style={{
                 backgroundColor: step1Valid() ? '#6366f1' : 'var(--bg-elevated)',
                 color: step1Valid() ? '#fff' : 'var(--text-muted)',
@@ -227,24 +289,25 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
             </div>
 
             <h1 className="text-lg font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-              Azure DevOps
+              Azure DevOps <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>(optional)</span>
             </h1>
-            <p className="text-sm mb-1 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Needed for the Pipeline Health Dashboard and Pipeline Optimizer. You can skip this and add it later in Settings.
-            </p>
-            <p className="text-xs mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              Generate at dev.azure.com → User settings (top right) → Personal Access Tokens. Required scopes: <strong>Build (Read)</strong> and <strong>Code (Read & Write)</strong>.
+            <p className="text-sm mb-5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              Needed for the Pipeline Health Dashboard and Pipeline Optimizer. You can skip this now and add it later in Settings.
             </p>
 
-            <Field
-              label="Personal Access Token"
-              value={form.adoPat}
-              onChange={set('adoPat')}
-              type="password"
-              show={showPat}
-              onToggleShow={() => setShowPat(s => !s)}
-              placeholder="your-ado-pat"
-            />
+            <div className="mb-5">
+              <Field
+                label="Personal Access Token"
+                value={form.adoPat}
+                onChange={set('adoPat')}
+                type="password"
+                show={showPat}
+                onToggleShow={() => setShowPat(s => !s)}
+                placeholder="your-devops-pat"
+              />
+            </div>
+
+            <HowToGuide type="devops" />
 
             {error && (
               <p className="mt-4 text-xs rounded-lg px-3 py-2" style={{ color: '#f87171', backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
@@ -252,7 +315,7 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
               </p>
             )}
 
-            <div className="mt-8 flex gap-3">
+            <div className="mt-6 flex gap-3">
               <button
                 className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all"
                 style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
@@ -295,14 +358,14 @@ export default function SetupPage({ onComplete }: { onComplete: () => void }) {
               </svg>
             </div>
             <h1 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-              Vantage is ready
+              You're all set
             </h1>
             <p className="text-sm mb-8 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-              Your credentials have been saved. You won't need to do this again.
+              Your credentials are saved on this machine. You won't need to do this again.
             </p>
             <button
               className="w-full py-2.5 rounded-lg text-sm font-medium"
-              style={{ backgroundColor: '#6366f1', color: '#fff' }}
+              style={{ backgroundColor: '#6366f1', color: '#fff', cursor: 'pointer' }}
               onClick={onComplete}
             >
               Open Vantage →

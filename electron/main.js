@@ -1,6 +1,6 @@
 'use strict'
 
-const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, Notification } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, Notification, dialog } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const net = require('net')
@@ -12,6 +12,9 @@ const BACKEND_URL = `http://127.0.0.1:${PORT}`
 let mainWindow = null
 let tray = null
 let updateReady = false
+let updateChecking = false
+let updateDownloadedVersion = null
+let manualUpdateCheck = false
 
 // Poll until the backend HTTP port accepts connections.
 function waitForBackend(timeoutMs = 20000) {
@@ -61,22 +64,115 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
 
-  autoUpdater.on('update-downloaded', () => {
-    updateReady = true
+  autoUpdater.on('checking-for-update', () => {
+    updateChecking = true
+    rebuildTrayMenu()
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    manualUpdateCheck = false
+    updateChecking = false
     rebuildTrayMenu()
     new Notification({
-      title: 'Vantage update ready',
-      body: 'Right-click the tray icon and choose "Restart to Update".',
+      title: 'Vantage update found',
+      body: `Downloading version ${info.version}.`,
     }).show()
   })
 
+  autoUpdater.on('update-not-available', () => {
+    updateChecking = false
+    rebuildTrayMenu()
+    if (manualUpdateCheck) {
+      manualUpdateCheck = false
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'No update found',
+        message: 'Vantage is already up to date.',
+      }).catch(() => {})
+    }
+  })
+
+  autoUpdater.on('download-progress', () => {
+    updateChecking = false
+    rebuildTrayMenu()
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    manualUpdateCheck = false
+    updateReady = true
+    updateChecking = false
+    updateDownloadedVersion = info.version
+    rebuildTrayMenu()
+    new Notification({
+      title: 'Vantage update ready',
+      body: `Version ${info.version} is ready. Restart Vantage to install it.`,
+    }).show()
+    promptRestartToUpdate(info.version)
+  })
+
   autoUpdater.on('error', (err) => {
+    manualUpdateCheck = false
+    updateChecking = false
+    rebuildTrayMenu()
     console.error('[updater]', err.message)
   })
 
   // Check on startup, then every 4 hours.
-  autoUpdater.checkForUpdates().catch(() => {})
-  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000)
+  checkForUpdates(false)
+  setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000)
+}
+
+function checkForUpdates(manual = false) {
+  if (!app.isPackaged) {
+    if (manual) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Updates unavailable in development',
+        message: 'Auto-updates only run in the installed Vantage desktop app.',
+      }).catch(() => {})
+    }
+    return
+  }
+
+  if (updateReady) {
+    promptRestartToUpdate(updateDownloadedVersion)
+    return
+  }
+
+  if (updateChecking) return
+  manualUpdateCheck = manual
+  autoUpdater.checkForUpdates()
+    .catch((err) => {
+      manualUpdateCheck = false
+      if (manual) {
+        dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          title: 'Update check failed',
+          message: err?.message ?? 'Could not check for updates.',
+        }).catch(() => {})
+      }
+    })
+}
+
+function promptRestartToUpdate(version) {
+  const detail = version
+    ? `Version ${version} has been downloaded and will install after restart.`
+    : 'An update has been downloaded and will install after restart.'
+
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Vantage update ready',
+    message: 'Restart Vantage to install the update?',
+    detail,
+  }).then(({ response }) => {
+    if (response === 0) {
+      app.isQuitting = true
+      autoUpdater.quitAndInstall()
+    }
+  }).catch(() => {})
 }
 
 // ── Tray ──────────────────────────────────────────────────────────────────────
@@ -115,14 +211,19 @@ function rebuildTrayMenu() {
     items.push({
       label: '↻ Restart to Update',
       click: () => {
-        app.isQuitting = true
-        autoUpdater.quitAndInstall()
+        promptRestartToUpdate(updateDownloadedVersion)
       },
     })
     items.push({ type: 'separator' })
   }
 
   items.push(
+    {
+      label: updateChecking ? 'Checking for Updates...' : 'Check for Updates',
+      enabled: !updateChecking,
+      click: () => checkForUpdates(true),
+    },
+    { type: 'separator' },
     {
       label: 'Launch at startup',
       type: 'checkbox',

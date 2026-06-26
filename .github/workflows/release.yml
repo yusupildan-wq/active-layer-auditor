@@ -194,4 +194,5 @@ jobs:
           tag_name: ${{ needs.release.outputs.tag }}
           files: |
             electron/dist/*.exe
+            electron/dist/*.blockmap
             electron/dist/latest.yml

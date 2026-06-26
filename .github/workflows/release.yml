@@ -2,8 +2,13 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. v1.3.0) — leave blank to auto-bump patch'
+        required: false
 
 permissions:
   contents: write
@@ -15,10 +20,30 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ github.ref_name }}
+      tag: ${{ steps.version.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version tag
+        id: version
+        run: |
+          INPUT="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT" ]; then
+            TAG="$INPUT"
+          else
+            LATEST=$(git tag --sort=-version:refname | grep '^v' | head -1)
+            if [ -z "$LATEST" ]; then LATEST="v0.0.0"; fi
+            IFS='.' read -r major minor patch <<< "${LATEST#v}"
+            TAG="v${major}.${minor}.$((patch + 1))"
+          fi
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-node@v4
         with:
@@ -73,22 +98,23 @@ jobs:
       - name: Create ZIP and checksum
         run: |
           cd release
-          zip -r "../vantage-${{ github.ref_name }}.zip" .
+          zip -r "../vantage-${{ steps.version.outputs.tag }}.zip" .
           cd ..
-          sha256sum "vantage-${{ github.ref_name }}.zip" > "vantage-${{ github.ref_name }}.zip.sha256"
+          sha256sum "vantage-${{ steps.version.outputs.tag }}.zip" > "vantage-${{ steps.version.outputs.tag }}.zip.sha256"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Vantage ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Vantage ${{ steps.version.outputs.tag }}
           files: |
-            vantage-${{ github.ref_name }}.zip
-            vantage-${{ github.ref_name }}.zip.sha256
+            vantage-${{ steps.version.outputs.tag }}.zip
+            vantage-${{ steps.version.outputs.tag }}.zip.sha256
           generate_release_notes: true
           body: |
-            ## Download Vantage ${{ github.ref_name }}
+            ## Download Vantage ${{ steps.version.outputs.tag }}
 
-            1. Download **`vantage-${{ github.ref_name }}.zip`**
+            1. Download **`vantage-${{ steps.version.outputs.tag }}.zip`**
             2. Optionally verify it against the included `.sha256` checksum
             3. Extract the ZIP completely
             4. Double-click **`Start Vantage.bat`**
@@ -99,7 +125,7 @@ jobs:
             AI features work out of the box — no extra setup needed.
 
             ### Or install as a desktop app
-            Download **`Vantage-Setup-${{ github.ref_name }}.exe`** for a proper Windows installer
+            Download **`Vantage-Setup-${{ steps.version.outputs.tag }}.exe`** for a proper Windows installer
             with a Start Menu shortcut and system-tray integration.
 
   electron:
@@ -137,10 +163,13 @@ jobs:
         shell: bash
         run: |
           npm install
-          npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version
+          npm version "${NEEDS_TAG#v}" --no-git-tag-version
           npm run dist
+        env:
+          NEEDS_TAG: ${{ needs.release.outputs.tag }}
 
       - name: Upload installer to release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.release.outputs.tag }}
           files: electron/dist/*.exe

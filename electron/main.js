@@ -166,6 +166,7 @@ app.on('before-quit', () => {
 })
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null)
   startBackend()
   createTray()
 

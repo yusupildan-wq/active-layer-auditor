@@ -27,8 +27,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check release trigger
+        id: check
+        run: |
+          MSG="${{ github.event.head_commit.message }}"
+          INPUT="${{ github.event.inputs.version }}"
+          if [[ "$MSG" == *"[release]"* || -n "$INPUT" ]]; then
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "proceed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Resolve version tag
         id: version
+        if: steps.check.outputs.proceed == 'true'
         run: |
           INPUT="${{ github.event.inputs.version }}"
           if [ -n "$INPUT" ]; then
@@ -46,6 +58,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.proceed == 'true'
         with:
           node-version: '24'
           cache: npm
@@ -54,6 +67,7 @@ jobs:
             frontend/package-lock.json
 
       - name: Test and build backend
+        if: steps.check.outputs.proceed == 'true'
         working-directory: backend
         run: |
           npm ci
@@ -61,6 +75,7 @@ jobs:
           npm run build
 
       - name: Build frontend
+        if: steps.check.outputs.proceed == 'true'
         working-directory: frontend
         run: |
           npm ci
@@ -68,11 +83,13 @@ jobs:
           npm run build
 
       - name: Audit production dependencies
+        if: steps.check.outputs.proceed == 'true'
         run: |
           cd backend && npm audit --omit=dev --audit-level=high
           cd ../frontend && npm audit --omit=dev --audit-level=high
 
       - name: Assemble portable Windows release
+        if: steps.check.outputs.proceed == 'true'
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
@@ -96,6 +113,7 @@ jobs:
           printf 'GROQ_API_KEY=%s\nAI_DATA_CONSENT=true\n' "$GROQ_API_KEY" > release/.env
 
       - name: Create ZIP and checksum
+        if: steps.check.outputs.proceed == 'true'
         run: |
           cd release
           zip -r "../vantage-${{ steps.version.outputs.tag }}.zip" .
@@ -103,6 +121,7 @@ jobs:
           sha256sum "vantage-${{ steps.version.outputs.tag }}.zip" > "vantage-${{ steps.version.outputs.tag }}.zip.sha256"
 
       - name: Publish GitHub Release
+        if: steps.check.outputs.proceed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -131,6 +150,7 @@ jobs:
   electron:
     runs-on: windows-latest
     needs: release
+    if: needs.release.outputs.tag != ''
 
     steps:
       - uses: actions/checkout@v4

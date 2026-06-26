@@ -80,6 +80,7 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: Vantage ${{ github.ref_name }}
           files: |
             vantage-${{ github.ref_name }}.zip
             vantage-${{ github.ref_name }}.zip.sha256

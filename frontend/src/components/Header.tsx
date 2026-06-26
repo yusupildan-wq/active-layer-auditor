@@ -6,7 +6,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/optionsets':  'Option Set Guard',
   '/readiness':   'Deployment Readiness Checker',
   '/comparison':  'Environment Comparison',
-  '/flows':       'Cloud Flow Monitor',
+  '/flows':       'Flow & Workflow Monitor',
   '/pipelines':   'Pipeline Health Dashboard',
   '/optimizer':   'Pipeline Optimizer',
   '/diagnostics': 'Diagnostics',

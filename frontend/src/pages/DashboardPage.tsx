@@ -273,9 +273,9 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="05"
-            title="Cloud Flow Monitor"
-            description="See every cloud flow's health at a glance — without clicking through Power Apps."
-            detail="Flow health, silent trigger detection, environment comparison, and connection reference blast-radius map — all in one place."
+            title="Flow & Workflow Monitor"
+            description="See cloud flows and classic workflows at a glance — without clicking through Power Apps."
+            detail="Flow and workflow health, environment comparison, state mismatch export, and connection reference blast-radius map — all in one place."
             accentColor="#60a5fa"
             accentGlow="rgba(96,165,250,0.08)"
             topLine="linear-gradient(90deg, transparent, rgba(96,165,250,0.55), transparent)"

@@ -69,6 +69,7 @@ function sessionToRun(s: any): FlowLastRun {
 }
 
 export type FlowCompareStatus = 'match' | 'drift' | 'source_only' | 'target_only'
+export type WorkflowKind = 'cloud_flow' | 'workflow'
 
 export interface FlowCompareEntry {
   name: string
@@ -84,6 +85,10 @@ export function normalizeDataverseId(value: string | null | undefined): string {
 
 function escapeODataString(value: string): string {
   return value.replace(/'/g, "''")
+}
+
+export function workflowCategory(kind: WorkflowKind): number {
+  return kind === 'workflow' ? 0 : 5
 }
 
 async function getFlowIdsForSolution(client: AxiosInstance, solutionUniqueName: string): Promise<Set<string>> {
@@ -109,11 +114,12 @@ async function getFlowIdsForSolution(client: AxiosInstance, solutionUniqueName: 
 
 async function getFlowList(
   client: AxiosInstance,
-  solutionFlowIds?: Set<string>
+  solutionFlowIds?: Set<string>,
+  kind: WorkflowKind = 'cloud_flow'
 ): Promise<{ name: string; enabled: boolean; modifiedOn: string }[]> {
   const flows = await fetchAllPages(
     client,
-    `/workflows?$filter=category eq 5&$select=workflowid,workflowidunique,name,statecode,modifiedon&$orderby=name asc`
+    `/workflows?$filter=category eq ${workflowCategory(kind)}&$select=workflowid,workflowidunique,name,statecode,modifiedon&$orderby=name asc`
   )
   const filtered = solutionFlowIds
     ? flows.filter((f: any) =>
@@ -131,7 +137,8 @@ async function getFlowList(
 export async function compareFlows(
   sourceClient: AxiosInstance,
   targetClient: AxiosInstance,
-  solutionUniqueName?: string
+  solutionUniqueName?: string,
+  kind: WorkflowKind = 'cloud_flow'
 ): Promise<FlowCompareEntry[]> {
   let sourceFlowIds: Set<string> | undefined
   let targetFlowIds: Set<string> | undefined
@@ -142,8 +149,8 @@ export async function compareFlows(
     ])
   }
   const [sourceFlows, targetFlows] = await Promise.all([
-    getFlowList(sourceClient, sourceFlowIds),
-    getFlowList(targetClient, targetFlowIds),
+    getFlowList(sourceClient, sourceFlowIds, kind),
+    getFlowList(targetClient, targetFlowIds, kind),
   ])
 
   const sourceMap = new Map(sourceFlows.map(f => [f.name.trim().toLowerCase(), f]))
@@ -188,10 +195,10 @@ export async function compareFlows(
   })
 }
 
-export async function getFlowHealth(client: AxiosInstance, solutionUniqueName?: string): Promise<FlowHealth[]> {
+export async function getFlowHealth(client: AxiosInstance, solutionUniqueName?: string, kind: WorkflowKind = 'cloud_flow'): Promise<FlowHealth[]> {
   let flows = await fetchAllPages(
     client,
-    `/workflows?$filter=category eq 5&$select=workflowid,workflowidunique,name,statecode,modifiedon,_ownerid_value&$orderby=name asc`
+    `/workflows?$filter=category eq ${workflowCategory(kind)}&$select=workflowid,workflowidunique,name,statecode,modifiedon,_ownerid_value&$orderby=name asc`
   )
   if (solutionUniqueName) {
     const ids = await getFlowIdsForSolution(client, solutionUniqueName)

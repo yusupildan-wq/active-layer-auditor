@@ -1,14 +1,18 @@
 import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import { makeDataverseClient, validateEnvironmentUrl } from '../auth'
-import { getFlowHealth, compareFlows, fetchAllPages, normalizeDataverseId } from '../flows'
+import { getFlowHealth, compareFlows, fetchAllPages, normalizeDataverseId, WorkflowKind, workflowCategory } from '../flows'
 import { explainFlowError } from '../ai'
 
 export const flowsRouter = Router()
 
+function parseWorkflowKind(value: unknown): WorkflowKind {
+  return value === 'workflow' ? 'workflow' : 'cloud_flow'
+}
+
 // GET /api/flows/solutions
 flowsRouter.get('/solutions', async (req: Request, res: Response) => {
-  const { environmentUrl } = req.query
+  const { environmentUrl, kind } = req.query
   if (!environmentUrl || typeof environmentUrl !== 'string') {
     res.status(400).json({ error: 'environmentUrl query param is required' }); return
   }
@@ -17,10 +21,11 @@ flowsRouter.get('/solutions', async (req: Request, res: Response) => {
   }
   try {
     const client = await makeDataverseClient(environmentUrl)
+    const workflowKind = parseWorkflowKind(kind)
     const [solResp, components, flows] = await Promise.all([
       client.get(`/solutions?$select=solutionid,uniquename,friendlyname,ismanaged&$orderby=friendlyname asc`),
       fetchAllPages(client, `/solutioncomponents?$filter=componenttype eq 29&$select=objectid,_solutionid_value`),
-      fetchAllPages(client, `/workflows?$filter=category eq 5&$select=workflowid,workflowidunique`),
+      fetchAllPages(client, `/workflows?$filter=category eq ${workflowCategory(workflowKind)}&$select=workflowid,workflowidunique`),
     ])
     const cloudFlowIds = new Set<string>()
     for (const f of flows) {
@@ -71,7 +76,7 @@ flowsRouter.post('/explain-error', async (req: Request, res: Response) => {
 })
 
 flowsRouter.get('/compare', async (req: Request, res: Response) => {
-  const { sourceUrl, targetUrl, solutionName } = req.query
+  const { sourceUrl, targetUrl, solutionName, kind } = req.query
   if (!sourceUrl || !targetUrl || typeof sourceUrl !== 'string' || typeof targetUrl !== 'string') {
     res.status(400).json({ error: 'sourceUrl and targetUrl query params are required' })
     return
@@ -85,7 +90,8 @@ flowsRouter.get('/compare', async (req: Request, res: Response) => {
       makeDataverseClient(targetUrl),
     ])
     const solName = typeof solutionName === 'string' && solutionName ? solutionName : undefined
-    const flows = await compareFlows(sourceClient, targetClient, solName)
+    const workflowKind = parseWorkflowKind(kind)
+    const flows = await compareFlows(sourceClient, targetClient, solName, workflowKind)
     res.json({ sourceUrl, targetUrl, totalFlows: flows.length, flows })
   } catch (err) {
     const detail = axios.isAxiosError(err)
@@ -96,7 +102,7 @@ flowsRouter.get('/compare', async (req: Request, res: Response) => {
 })
 
 flowsRouter.get('/health', async (req: Request, res: Response) => {
-  const { environmentUrl, solutionName } = req.query
+  const { environmentUrl, solutionName, kind } = req.query
   if (!environmentUrl || typeof environmentUrl !== 'string') {
     res.status(400).json({ error: 'environmentUrl query param is required' })
     return
@@ -107,7 +113,8 @@ flowsRouter.get('/health', async (req: Request, res: Response) => {
   try {
     const client = await makeDataverseClient(environmentUrl)
     const solName = typeof solutionName === 'string' && solutionName ? solutionName : undefined
-    const flows = await getFlowHealth(client, solName)
+    const workflowKind = parseWorkflowKind(kind)
+    const flows = await getFlowHealth(client, solName, workflowKind)
     res.json({ environmentUrl, totalFlows: flows.length, flows })
   } catch (err) {
     const detail = axios.isAxiosError(err)

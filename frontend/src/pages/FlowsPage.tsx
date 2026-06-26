@@ -8,6 +8,7 @@ type FlowCompareStatus = 'match' | 'drift' | 'source_only' | 'target_only'
 type CompareFilter = 'all' | 'drift' | 'state_mismatch' | 'source_only' | 'target_only' | 'match'
 type ConnRefFilter = 'all' | 'broken' | 'high_risk' | 'healthy'
 type ConnRefRisk = 'critical' | 'high' | 'medium' | 'low'
+type WorkflowKind = 'cloud_flow' | 'workflow'
 
 interface AffectedFlow { id: string; name: string; enabled: boolean }
 
@@ -74,8 +75,8 @@ function EnabledPill({ enabled }: { enabled: boolean }) {
 
 interface Solution { uniqueName: string; displayName: string; isManaged: boolean; flowCount: number }
 
-function SolutionPicker({ envUrl, value, onChange }: {
-  envUrl: string; value: string; onChange: (v: string) => void
+function SolutionPicker({ envUrl, value, onChange, kind }: {
+  envUrl: string; value: string; onChange: (v: string) => void; kind: WorkflowKind
 }) {
   const [solutions, setSolutions] = useState<Solution[]>([])
   const [loading, setLoading]     = useState(false)
@@ -87,7 +88,8 @@ function SolutionPicker({ envUrl, value, onChange }: {
     if (!url) return
     setLoading(true); setErr(null)
     try {
-      const resp = await apiFetch(`${API_URL}/api/flows/solutions?environmentUrl=${encodeURIComponent(url)}`)
+      const params = new URLSearchParams({ environmentUrl: url, kind })
+      const resp = await apiFetch(`${API_URL}/api/flows/solutions?${params}`)
       const json = await resp.json()
       if (!resp.ok) throw new Error(json.error ?? 'Failed')
       setSolutions(json.solutions ?? [])
@@ -110,8 +112,8 @@ function SolutionPicker({ envUrl, value, onChange }: {
           <select value={value} onChange={e => onChange(e.target.value)}
             className="flex-1 rounded-lg px-3 py-2 text-sm focus:outline-none"
             style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-mid)', color: 'var(--text-primary)' }}>
-            <option value="">— All flows —</option>
-            {solutions.map(s => <option key={s.uniqueName} value={s.uniqueName}>{s.displayName} ({s.flowCount} flow{s.flowCount !== 1 ? 's' : ''})</option>)}
+            <option value="">— All {kind === 'workflow' ? 'workflows' : 'flows'} —</option>
+            {solutions.map(s => <option key={s.uniqueName} value={s.uniqueName}>{s.displayName} ({s.flowCount} {kind === 'workflow' ? 'workflow' : 'flow'}{s.flowCount !== 1 ? 's' : ''})</option>)}
           </select>
         )}
         <button type="button" onClick={loadSolutions} disabled={!envUrl.trim() || loading}
@@ -125,7 +127,7 @@ function SolutionPicker({ envUrl, value, onChange }: {
   )
 }
 
-function FlowCompareSection() {
+function FlowCompareSection({ kind }: { kind: WorkflowKind }) {
   const [sourceUrl, setSourceUrl]       = useState('')
   const [targetUrl, setTargetUrl]       = useState('')
   const [solutionName, setSolutionName] = useState('')
@@ -134,6 +136,11 @@ function FlowCompareSection() {
   const [data, setData]                 = useState<FlowCompareResponse | null>(null)
   const [filter, setFilter]             = useState<CompareFilter>('all')
   const [showAllCompare, setShowAllCompare] = useState(false)
+  const compareLabels = {
+    plural: kind === 'workflow' ? 'workflows' : 'flows',
+    tableName: kind === 'workflow' ? 'Workflow Name' : 'Flow Name',
+    button: kind === 'workflow' ? 'Compare Workflows' : 'Compare Flows',
+  }
 
   async function handleCompare(e: React.FormEvent) {
     e.preventDefault()
@@ -144,6 +151,7 @@ function FlowCompareSection() {
       let resp: Response
       try {
         const params = new URLSearchParams({ sourceUrl: sourceUrl.trim(), targetUrl: targetUrl.trim() })
+        params.set('kind', kind)
         if (solutionName) params.set('solutionName', solutionName)
         resp = await apiFetch(`${API_URL}/api/flows/compare?${params}`)
       } catch {
@@ -162,6 +170,10 @@ function FlowCompareSection() {
 
   function exportCsv() {
     if (!data) return
+    const csvValue = (value: string) =>
+      value
+        .replace(/\u2013|\u2014/g, '-')
+        .replace(/\u00b7/g, ';')
     const statusLabel: Record<CompareFilter, string> = {
       all: 'All',
       drift: 'Out of Sync',
@@ -183,16 +195,16 @@ function FlowCompareSection() {
       ...filtered.map(f => [
         f.name,
         f.status === 'drift' ? 'Out of Sync' : f.status === 'source_only' ? 'Not Deployed' : f.status === 'target_only' ? 'Target Only' : 'Match',
-        f.source ? (f.source.enabled ? 'On' : 'Off') : '—',
-        f.target ? (f.target.enabled ? 'On' : 'Off') : '—',
-        f.driftReasons.join('; ') || '—',
+        f.source ? (f.source.enabled ? 'On' : 'Off') : '-',
+        f.target ? (f.target.enabled ? 'On' : 'Off') : '-',
+        f.driftReasons.map(csvValue).join('; ') || '-',
       ]),
     ]
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-    a.download = `flow-comparison-${statusSlug[filter]}-${new Date().toISOString().slice(0, 10)}.csv`
-    a.title = `Export ${statusLabel[filter]} flows`
+    a.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+    a.download = `${kind === 'workflow' ? 'workflow' : 'flow'}-comparison-${statusSlug[filter]}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.title = `Export ${statusLabel[filter]} ${compareLabels.plural}`
     a.click()
   }
 
@@ -257,13 +269,13 @@ function FlowCompareSection() {
                 onBlur={e =>  { e.currentTarget.style.borderColor = 'var(--border-mid)'; e.currentTarget.style.boxShadow = 'none' }} />
             </div>
           </div>
-          <SolutionPicker envUrl={sourceUrl} value={solutionName} onChange={setSolutionName} />
+          <SolutionPicker envUrl={sourceUrl} value={solutionName} onChange={setSolutionName} kind={kind} />
           <button type="submit" disabled={isLoading || !sourceUrl.trim() || !targetUrl.trim()}
             className="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#1d4ed8', boxShadow: '0 0 20px rgba(29,78,216,0.3)' }}
             onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#2563eb' }}
             onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1d4ed8' }}>
-            {isLoading ? 'Comparing…' : 'Compare Flows'}
+            {isLoading ? 'Comparing…' : compareLabels.button}
           </button>
         </div>
       </form>
@@ -320,7 +332,7 @@ function FlowCompareSection() {
 
           {/* Table */}
           {filtered.length === 0 ? (
-            <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--text-muted)' }}>No flows match this filter.</p>
+            <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--text-muted)' }}>No {compareLabels.plural} match this filter.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="text-xs" style={{ width: '100%', tableLayout: 'fixed' }}>
@@ -333,7 +345,7 @@ function FlowCompareSection() {
                 </colgroup>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {["Flow Name", "Status", "Source", "Target", "What's Different"].map((h, i) => (
+                    {[compareLabels.tableName, "Status", "Source", "Target", "What's Different"].map((h, i) => (
                       <th key={i} className="px-4 py-3 text-left font-semibold tracking-wider uppercase"
                         style={{ color: 'var(--text-muted)' }}>{h}</th>
                     ))}
@@ -1300,6 +1312,7 @@ function ConnectionRefSection() {
 
 export default function FlowsPage() {
   const [inputUrl, setInputUrl]   = useEnvironmentUrl()
+  const [kind, setKind]           = useState<WorkflowKind>('cloud_flow')
 
   const [isLoading, setIsLoading]     = useState(false)
   const [error, setError]             = useState<string | null>(null)
@@ -1309,6 +1322,26 @@ export default function FlowsPage() {
   const [search, setSearch]           = useState('')
   const [scannedAt, setScannedAt]     = useState<Date | null>(null)
   const [solutionName, setSolutionName] = useState('')
+  const labels = {
+    plural: kind === 'workflow' ? 'workflows' : 'cloud flows',
+    title: 'Flow & Workflow Monitor',
+    healthTitle: kind === 'workflow' ? 'Workflow Health' : 'Flow Health',
+    compareTitle: kind === 'workflow' ? 'Workflow Comparison' : 'Flow Comparison',
+    checkButton: kind === 'workflow' ? 'Check Workflows' : 'Check Flows',
+    tableName: kind === 'workflow' ? 'Workflow Name' : 'Flow Name',
+  }
+
+  function handleKindChange(next: WorkflowKind) {
+    if (next === kind) return
+    setKind(next)
+    setData(null)
+    setError(null)
+    setSearch('')
+    setFilter('all')
+    setShowAll(false)
+    setScannedAt(null)
+    setSolutionName('')
+  }
 
   async function fetchFlows(url: string, solName?: string) {
     setIsLoading(true)
@@ -1318,7 +1351,7 @@ export default function FlowsPage() {
     try {
       let resp: Response
       try {
-        const params = new URLSearchParams({ environmentUrl: url })
+        const params = new URLSearchParams({ environmentUrl: url, kind })
         if (solName) params.set('solutionName', solName)
         resp = await apiFetch(`${API_URL}/api/flows/health?${params}`)
       } catch {
@@ -1383,23 +1416,41 @@ export default function FlowsPage() {
           </p>
           <h1 className="font-display font-semibold leading-tight"
             style={{ fontSize: 'clamp(2rem, 4vw, 3.2rem)', color: 'var(--text-primary)' }}>
-            Cloud Flow Monitor
+            {labels.title}
           </h1>
           <p className="text-sm mt-3 max-w-lg" style={{ color: 'var(--text-secondary)' }}>
-            See every cloud flow's health at a glance — run history, failures, and error messages without clicking through Power Apps.
+            Monitor cloud flows and classic Dataverse workflows without clicking through Power Apps.
           </p>
         </div>
       </section>
 
       <main className="max-w-7xl mx-auto px-6 py-10 animate-slide-up space-y-8">
+        <div className="inline-flex rounded-lg p-1" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          {([
+            { key: 'cloud_flow' as WorkflowKind, label: 'Cloud Flows' },
+            { key: 'workflow' as WorkflowKind, label: 'Workflows' },
+          ]).map(option => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => handleKindChange(option.key)}
+              className="px-4 py-2 text-xs font-semibold rounded-md transition-all"
+              style={kind === option.key
+                ? { backgroundColor: 'rgba(96,165,250,0.14)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.28)' }
+                : { color: 'var(--text-secondary)', border: '1px solid transparent' }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
         {/* Section 1: Single Environment Health */}
         <section className="space-y-5">
           <div>
             <p className="text-xs font-semibold tracking-[0.24em] uppercase mb-1" style={{ color: '#60a5fa' }}>Section 01</p>
-            <h2 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>Flow Health</h2>
+            <h2 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>{labels.healthTitle}</h2>
             <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-              Enter an environment URL to see all cloud flows, their run status, and any failures in the last 7 days.
+              Enter an environment URL to see all {labels.plural}, their status, and recent run signals where available.
             </p>
           </div>
 
@@ -1436,11 +1487,11 @@ export default function FlowsPage() {
                     style={{ backgroundColor: '#1d4ed8', boxShadow: '0 0 20px rgba(29,78,216,0.3)' }}
                     onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#2563eb' }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#1d4ed8' }}>
-                    {isLoading ? 'Loading…' : 'Check Flows'}
+                    {isLoading ? 'Loading…' : labels.checkButton}
                   </button>
                 </div>
               </div>
-              <SolutionPicker envUrl={inputUrl} value={solutionName} onChange={setSolutionName} />
+              <SolutionPicker key={`health-${kind}`} envUrl={inputUrl} value={solutionName} onChange={setSolutionName} kind={kind} />
             </div>
           </form>
 
@@ -1501,7 +1552,7 @@ export default function FlowsPage() {
                   )}
                   <input
                     type="text"
-                    placeholder="Search flows…"
+                    placeholder={`Search ${labels.plural}…`}
                     value={search}
                     onChange={e => { setSearch(e.target.value); setShowAll(false) }}
                     className="rounded-lg px-3 py-1.5 text-xs transition-all focus:outline-none"
@@ -1528,7 +1579,7 @@ export default function FlowsPage() {
               {/* Table */}
               {filtered.length === 0 ? (
                 <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--text-muted)' }}>
-                  No flows match this filter.
+                  No {labels.plural} match this filter.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -1536,7 +1587,7 @@ export default function FlowsPage() {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <th className="w-8" />
-                        {['Flow Name', 'Status', 'Trigger', 'Last Run', 'When', 'Failures (7d)', 'Last Error'].map((h, i) => (
+                        {[labels.tableName, 'Status', 'Trigger', 'Last Run', 'When', 'Failures (7d)', 'Last Error'].map((h, i) => (
                           <th key={i} className="px-4 py-3 text-left font-semibold tracking-wider uppercase"
                             style={{ color: 'var(--text-muted)' }}>
                             {h}
@@ -1570,12 +1621,12 @@ export default function FlowsPage() {
         <section className="space-y-5">
           <div>
             <p className="text-xs font-semibold tracking-[0.24em] uppercase mb-1" style={{ color: '#60a5fa' }}>Section 02</p>
-            <h2 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>Flow Comparison</h2>
+            <h2 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>{labels.compareTitle}</h2>
             <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-              Compare cloud flows between two environments — see what's missing, what's out of sync, and what has undeployed changes.
+              Compare {labels.plural} between two environments — see what's missing, what's out of sync, and what has undeployed changes.
             </p>
           </div>
-          <FlowCompareSection />
+          <FlowCompareSection key={`compare-${kind}`} kind={kind} />
         </section>
 
         {/* Divider */}

@@ -84,6 +84,7 @@ function setupAutoUpdater() {
     rebuildTrayMenu()
     if (manualUpdateCheck) {
       manualUpdateCheck = false
+      showWindow()
       dialog.showMessageBox(mainWindow, {
         type: 'info',
         title: 'No update found',
@@ -111,10 +112,19 @@ function setupAutoUpdater() {
   })
 
   autoUpdater.on('error', (err) => {
+    const wasManual = manualUpdateCheck
     manualUpdateCheck = false
     updateChecking = false
     rebuildTrayMenu()
     console.error('[updater]', err.message)
+    if (wasManual) {
+      showWindow()
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Update check failed',
+        message: err?.message ?? 'Could not reach update server.',
+      }).catch(() => {})
+    }
   })
 
   // Check on startup, then every 4 hours.
@@ -139,18 +149,17 @@ function checkForUpdates(manual = false) {
     return
   }
 
+  // Manual checks always proceed — reset any stuck checking state
+  if (manual) updateChecking = false
   if (updateChecking) return
+
   manualUpdateCheck = manual
+  updateChecking = true
   autoUpdater.checkForUpdates()
     .catch((err) => {
       manualUpdateCheck = false
-      if (manual) {
-        dialog.showMessageBox(mainWindow, {
-          type: 'error',
-          title: 'Update check failed',
-          message: err?.message ?? 'Could not check for updates.',
-        }).catch(() => {})
-      }
+      updateChecking = false
+      rebuildTrayMenu()
     })
 }
 

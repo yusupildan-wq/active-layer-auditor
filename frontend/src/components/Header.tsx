@@ -26,11 +26,11 @@ export default function Header() {
   const [systemOpen, setSystemOpen] = useState(false)
 
   return (
-    <header style={{ backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border)' }}>
+    <header style={{ backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border)', WebkitAppRegion: 'drag' } as React.CSSProperties}>
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
 
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-3 flex-shrink-0 group">
+        <Link to="/" className="flex items-center gap-3 flex-shrink-0 group" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <div
             className="w-7 h-7 rounded-md flex items-center justify-center transition-all"
             style={{
@@ -60,8 +60,8 @@ export default function Header() {
           </>
         )}
 
-        {/* Right side */}
-        <div className="ml-auto flex items-center gap-5">
+        {/* Right side — padding-right leaves room for the native window controls */}
+        <div className="ml-auto flex items-center gap-5" style={{ paddingRight: '148px', WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           {pageLabel && (
             <Link
               to="/"

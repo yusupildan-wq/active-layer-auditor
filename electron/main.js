@@ -266,6 +266,13 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'Vantage',
+    backgroundColor: '#08080d',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#08080d',
+      symbolColor: '#94a3b8',
+      height: 36,
+    },
     // Use a custom app icon if one is available.
     ...(fs.existsSync(path.join(__dirname, 'assets', 'icon.png')) && {
       icon: path.join(__dirname, 'assets', 'icon.png'),

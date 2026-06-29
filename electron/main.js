@@ -1,6 +1,6 @@
 'use strict'
 
-const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, Notification, dialog } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, shell, Notification, dialog, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const net = require('net')
@@ -58,6 +58,21 @@ function startBackend() {
   require(entry)
 }
 
+// ── IPC ───────────────────────────────────────────────────────────────────────
+
+function sendUpdateStatus(payload) {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-status', payload)
+    }
+  } catch {}
+}
+
+ipcMain.on('install-update', () => {
+  app.isQuitting = true
+  autoUpdater.quitAndInstall()
+})
+
 // ── Auto-update ───────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
@@ -67,21 +82,24 @@ function setupAutoUpdater() {
   autoUpdater.on('checking-for-update', () => {
     updateChecking = true
     rebuildTrayMenu()
+    sendUpdateStatus({ type: 'checking' })
   })
 
   autoUpdater.on('update-available', (info) => {
     manualUpdateCheck = false
     updateChecking = false
     rebuildTrayMenu()
+    sendUpdateStatus({ type: 'downloading', version: info.version })
     new Notification({
       title: 'Vantage update found',
       body: `Downloading version ${info.version}.`,
     }).show()
   })
 
-  autoUpdater.on('update-not-available', () => {
+  autoUpdater.on('update-not-available', (info) => {
     updateChecking = false
     rebuildTrayMenu()
+    sendUpdateStatus({ type: 'current', version: info.version })
     if (manualUpdateCheck) {
       manualUpdateCheck = false
       showWindow()
@@ -93,9 +111,10 @@ function setupAutoUpdater() {
     }
   })
 
-  autoUpdater.on('download-progress', () => {
+  autoUpdater.on('download-progress', (progress) => {
     updateChecking = false
     rebuildTrayMenu()
+    sendUpdateStatus({ type: 'progress', percent: Math.round(progress.percent) })
   })
 
   autoUpdater.on('update-downloaded', (info) => {
@@ -104,6 +123,7 @@ function setupAutoUpdater() {
     updateChecking = false
     updateDownloadedVersion = info.version
     rebuildTrayMenu()
+    sendUpdateStatus({ type: 'ready', version: info.version })
     new Notification({
       title: 'Vantage update ready',
       body: `Version ${info.version} is ready. Restart Vantage to install it.`,
@@ -116,6 +136,7 @@ function setupAutoUpdater() {
     manualUpdateCheck = false
     updateChecking = false
     rebuildTrayMenu()
+    sendUpdateStatus({ type: 'error', message: err?.message ?? 'Unknown error' })
     console.error('[updater]', err.message)
     if (wasManual) {
       showWindow()
@@ -135,6 +156,7 @@ function setupAutoUpdater() {
 function checkForUpdates(manual = false) {
   if (!app.isPackaged) {
     if (manual) {
+      showWindow()
       dialog.showMessageBox(mainWindow, {
         type: 'info',
         title: 'Updates unavailable in development',
@@ -164,6 +186,7 @@ function checkForUpdates(manual = false) {
 }
 
 function promptRestartToUpdate(version) {
+  showWindow()
   const detail = version
     ? `Version ${version} has been downloaded and will install after restart.`
     : 'An update has been downloaded and will install after restart.'
@@ -219,9 +242,7 @@ function rebuildTrayMenu() {
   if (updateReady) {
     items.push({
       label: '↻ Restart to Update',
-      click: () => {
-        promptRestartToUpdate(updateDownloadedVersion)
-      },
+      click: () => promptRestartToUpdate(updateDownloadedVersion),
     })
     items.push({ type: 'separator' })
   }
@@ -289,8 +310,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      // Block navigation away from the app.
       sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   })
 

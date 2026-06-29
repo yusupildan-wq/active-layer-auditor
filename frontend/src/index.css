@@ -36,6 +36,18 @@
     line-height: 1.6;
   }
 
+  /* Subtle noise grain overlay — makes flat dark bg feel rich */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnPjxmaWx0ZXIgaWQ9J24nPjxmZVR1cmJ1bGVuY2UgdHlwZT0nZnJhY3RhbE5vaXNlJyBiYXNlRnJlcXVlbmN5PScwLjY1JyBudW1PY3RhdmVzPSczJyBzdGl0Y2hUaWxlcz0nc3RpdGNoJy8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9JzEwMCUnIGhlaWdodD0nMTAwJScgZmlsdGVyPSd1cmwoI24pJy8+PC9zdmc+");
+    opacity: 0.028;
+    mix-blend-mode: overlay;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Space Grotesk', sans-serif;
     letter-spacing: -0.01em;
@@ -87,4 +99,32 @@
     background: linear-gradient(90deg, transparent 0%, #f59e0b 50%, transparent 100%);
     opacity: 0.4;
   }
+
+  /* Staggered card entrance */
+  .animate-stagger-item {
+    animation: staggerUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--bg-elevated) 25%,
+      var(--border-mid) 37%,
+      var(--bg-elevated) 63%
+    );
+    background-size: 400px 100%;
+    animation: shimmer 1.4s ease infinite;
+    border-radius: 6px;
+  }
+}
+
+@keyframes staggerUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
 }

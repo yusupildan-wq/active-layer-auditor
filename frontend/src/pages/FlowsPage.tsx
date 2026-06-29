@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useEnvironmentUrl } from '../hooks/useEnvironmentUrl'
 import { apiFetch } from '../api'
 import ConfirmActionDialog from '../components/ConfirmActionDialog'
+import { SkeletonTable } from '../components/Skeleton'
 
 type FlowCompareStatus = 'match' | 'drift' | 'source_only' | 'target_only'
 type CompareFilter = 'all' | 'drift' | 'state_mismatch' | 'source_only' | 'target_only' | 'match'
@@ -1500,6 +1501,13 @@ export default function FlowsPage() {
             <div className="rounded-lg px-4 py-3 text-xs"
               style={{ backgroundColor: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171' }}>
               {error}
+            </div>
+          )}
+
+          {/* Skeleton while loading */}
+          {isLoading && (
+            <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+              <SkeletonTable rows={8} cols={4} />
             </div>
           )}
 

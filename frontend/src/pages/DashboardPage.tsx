@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 interface FeatureCardProps {
   index: string
+  stagger: number
   title: string
   description: string
   detail: string
@@ -25,17 +26,22 @@ interface SystemCardProps {
   onClick: () => void
 }
 
-function FeatureCard({ index, title, description, detail, accentColor, accentGlow, topLine, icon, onClick }: FeatureCardProps) {
+function FeatureCard({ index, stagger, title, description, detail, accentColor, accentGlow, topLine, icon, onClick }: FeatureCardProps) {
   const [hovered, setHovered] = useState(false)
 
   return (
     <div
-      className="relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300"
+      className="relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 animate-stagger-item"
       style={{
-        backgroundColor: 'var(--bg-surface)',
-        border: `1px solid ${hovered ? accentColor + '40' : 'var(--border)'}`,
-        boxShadow: hovered ? `0 0 40px ${accentGlow}` : 'none',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        backgroundColor: 'rgba(14, 14, 22, 0.7)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        border: `1px solid ${hovered ? accentColor + '45' : 'var(--border)'}`,
+        boxShadow: hovered
+          ? `0 0 0 1px ${accentColor}18, 0 8px 40px ${accentGlow}, 0 0 80px ${accentGlow}`
+          : '0 1px 0 0 rgba(255,255,255,0.03) inset',
+        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
+        animationDelay: `${stagger * 65}ms`,
       }}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
@@ -166,12 +172,20 @@ export default function DashboardPage() {
       <section className="relative overflow-hidden" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div
-            className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full"
-            style={{ background: 'radial-gradient(ellipse, rgba(91,95,199,0.07) 0%, transparent 70%)' }}
+            className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1100px] h-[600px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(91,95,199,0.13) 0%, transparent 65%)' }}
           />
           <div
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-px"
-            style={{ background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.45), transparent)' }}
+            className="absolute top-20 left-[15%] w-[400px] h-[400px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(129,140,248,0.06) 0%, transparent 70%)', filter: 'blur(40px)' }}
+          />
+          <div
+            className="absolute top-10 right-[10%] w-[300px] h-[300px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(192,132,252,0.05) 0%, transparent 70%)', filter: 'blur(40px)' }}
+          />
+          <div
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-px"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(129,140,248,0.6), transparent)' }}
           />
         </div>
 
@@ -197,18 +211,29 @@ export default function DashboardPage() {
       </section>
 
       {/* Feature cards */}
-      <main className="max-w-7xl mx-auto px-6 py-14">
+      <main className="relative max-w-7xl mx-auto px-6 py-14">
+        {/* Ambient glow behind card grid */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-20 left-1/4 w-[500px] h-[500px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(91,95,199,0.07) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+          <div className="absolute top-60 right-1/4 w-[400px] h-[400px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(96,165,250,0.05) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+          <div className="absolute bottom-20 left-1/3 w-[400px] h-[300px] rounded-full"
+            style={{ background: 'radial-gradient(ellipse, rgba(45,212,191,0.04) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        </div>
+
         <p
-          className="text-xs font-semibold tracking-[0.25em] uppercase mb-8"
+          className="relative text-xs font-semibold tracking-[0.25em] uppercase mb-8"
           style={{ color: 'var(--text-muted)' }}
         >
           Features
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 animate-slide-up">
+        <div className="relative grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
 
           <FeatureCard
             index="01"
+            stagger={0}
             title="Active Layer Scanner"
             description="Identify active-layer customizations across your Dataverse environment."
             detail="Scans all components and flags anything sitting in the active layer that could cause issues during solution export."
@@ -225,6 +250,7 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="02"
+            stagger={1}
             title="Option Set Guard"
             description="Compare and protect critical option set values in your environment."
             detail="Validates that protected option set values match the expected configuration and restores any that have drifted."
@@ -241,6 +267,7 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="03"
+            stagger={2}
             title="Deployment Readiness Checker"
             description="Validate your environment is fully prepared before a Greymatter deployment."
             detail="Runs 6 automated checks across active layers, flows, solutions, env vars, connections, and option sets — generating a single pass/fail report."
@@ -257,6 +284,7 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="04"
+            stagger={3}
             title="Environment Comparison"
             description="Diff two Dataverse environments side by side to detect configuration drift."
             detail="Compares solutions, environment variables, connection references, and cloud flows — highlighting what's different, missing, or extra between environments."
@@ -273,6 +301,7 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="05"
+            stagger={4}
             title="Flow & Workflow Monitor"
             description="See cloud flows and classic workflows at a glance — without clicking through Power Apps."
             detail="Flow and workflow health, environment comparison, state mismatch export, and connection reference blast-radius map — all in one place."
@@ -289,6 +318,7 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="06"
+            stagger={5}
             title="Pipeline Health Dashboard"
             description="Monitor deployment pipeline runs across all your Power Platform pipelines."
             detail="Track success rates, average durations, and failure trends. Drill into any run to see the exact error message and stage breakdown."
@@ -305,6 +335,7 @@ export default function DashboardPage() {
 
           <FeatureCard
             index="07"
+            stagger={6}
             title="Pipeline Optimizer"
             description="Automatically detect and fix slow pipeline patterns — then ship improvements as a PR."
             detail="Analyzes your YAML pipeline for shallow clones, missing caches, legacy task versions, and Power Platform-specific bottlenecks. Applies fixes to a new branch and opens a PR to main."

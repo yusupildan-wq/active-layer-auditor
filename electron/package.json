@@ -69,7 +69,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Vantage"
+      "shortcutName": "Vantage",
+      "differentialPackage": false
     }
   }
 }

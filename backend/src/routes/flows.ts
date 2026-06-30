@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import axios from 'axios'
 import { makeDataverseClient, validateEnvironmentUrl } from '../auth'
 import { getFlowHealth, compareFlows, fetchAllPages, normalizeDataverseId, WorkflowKind, workflowCategory } from '../flows'
+import { getMonitorConfigurations, getMonitorObjects } from '../monitorObjects'
 import { explainFlowError } from '../ai'
 
 export const flowsRouter = Router()
@@ -116,6 +117,55 @@ flowsRouter.get('/health', async (req: Request, res: Response) => {
     const workflowKind = parseWorkflowKind(kind)
     const flows = await getFlowHealth(client, solName, workflowKind)
     res.json({ environmentUrl, totalFlows: flows.length, flows })
+  } catch (err) {
+    const detail = axios.isAxiosError(err)
+      ? (err.response?.data?.error?.message ?? err.message)
+      : (err instanceof Error ? err.message : 'Failed')
+    res.status(500).json({ error: detail })
+  }
+})
+
+// GET /api/flows/monitor-configurations
+flowsRouter.get('/monitor-configurations', async (req: Request, res: Response) => {
+  const { environmentUrl } = req.query
+  if (!environmentUrl || typeof environmentUrl !== 'string') {
+    res.status(400).json({ error: 'environmentUrl query param is required' }); return
+  }
+  try { validateEnvironmentUrl(environmentUrl) } catch (e) {
+    res.status(400).json({ error: (e as Error).message }); return
+  }
+  try {
+    const client = await makeDataverseClient(environmentUrl)
+    const configurations = await getMonitorConfigurations(client)
+    if (configurations === null) {
+      res.json({ available: false, configurations: [] }); return
+    }
+    res.json({ available: true, configurations })
+  } catch (err) {
+    const detail = axios.isAxiosError(err)
+      ? (err.response?.data?.error?.message ?? err.message)
+      : (err instanceof Error ? err.message : 'Failed')
+    res.status(500).json({ error: detail })
+  }
+})
+
+// GET /api/flows/monitor-objects
+flowsRouter.get('/monitor-objects', async (req: Request, res: Response) => {
+  const { environmentUrl, configurationId } = req.query
+  if (!environmentUrl || typeof environmentUrl !== 'string') {
+    res.status(400).json({ error: 'environmentUrl query param is required' }); return
+  }
+  try { validateEnvironmentUrl(environmentUrl) } catch (e) {
+    res.status(400).json({ error: (e as Error).message }); return
+  }
+  try {
+    const client = await makeDataverseClient(environmentUrl)
+    const configId = typeof configurationId === 'string' && configurationId ? configurationId : undefined
+    const objects = await getMonitorObjects(client, configId)
+    if (objects === null) {
+      res.json({ available: false, objects: [] }); return
+    }
+    res.json({ available: true, totalObjects: objects.length, objects })
   } catch (err) {
     const detail = axios.isAxiosError(err)
       ? (err.response?.data?.error?.message ?? err.message)

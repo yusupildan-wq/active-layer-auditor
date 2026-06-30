@@ -1309,6 +1309,349 @@ function ConnectionRefSection() {
   )
 }
 
+// ─── Monitoring Components badges ────────────────────────────────────────────
+
+function ObjectTypeBadge({ type }: { type: WorkflowKind }) {
+  return type === 'cloud_flow' ? (
+    <span className="inline-flex items-center justify-center whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-semibold leading-none"
+      style={{ color: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.07)', border: '1px solid rgba(96,165,250,0.2)' }}>
+      Cloud Flow
+    </span>
+  ) : (
+    <span className="inline-flex items-center justify-center whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-semibold leading-none"
+      style={{ color: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.07)', border: '1px solid rgba(167,139,250,0.2)' }}>
+      Workflow
+    </span>
+  )
+}
+
+function PassBadge({ pass }: { pass: boolean }) {
+  return pass ? (
+    <span className="inline-flex items-center justify-center whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-semibold leading-none"
+      style={{ color: '#4ade80', backgroundColor: 'rgba(34,197,94,0.07)', border: '1px solid rgba(34,197,94,0.2)' }}>
+      Yes
+    </span>
+  ) : (
+    <span className="inline-flex items-center justify-center whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-semibold leading-none"
+      style={{ color: '#f87171', backgroundColor: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)' }}>
+      No
+    </span>
+  )
+}
+
+// ─── Monitoring Components: curated list backed by the client's own ─────────
+// "greymatter Monitor Objects" Dataverse table (foundry_greymattermonitor*),
+// not a recomputed dump of every flow/workflow in the environment.
+
+interface MonitorConfigurationOption { id: string; name: string; environmentTitle: string | null }
+
+interface MonitorObjectEntry {
+  id: string
+  name: string
+  objectType: WorkflowKind
+  intendedStatus: boolean
+  currentStatus: boolean
+  isFound: boolean
+  passValidation: boolean
+  alertRequired: boolean
+  alertSent: boolean
+  lastValidationCheck: string | null
+  modifiedOn: string | null
+}
+
+function useMonitorObjects() {
+  const [envUrl, setEnvUrl]                 = useEnvironmentUrl()
+  const [isLoading, setIsLoading]           = useState(false)
+  const [error, setError]                   = useState<string | null>(null)
+  const [available, setAvailable]           = useState<boolean | null>(null)
+  const [configurations, setConfigurations] = useState<MonitorConfigurationOption[]>([])
+  const [configurationId, setConfigurationId] = useState('')
+  const [data, setData]                     = useState<MonitorObjectEntry[] | null>(null)
+
+  async function loadObjects(configId: string, url: string) {
+    const params = new URLSearchParams({ environmentUrl: url })
+    if (configId) params.set('configurationId', configId)
+    const resp = await apiFetch(`${API_URL}/api/flows/monitor-objects?${params}`)
+    const json = await resp.json()
+    if (!resp.ok) throw new Error(json.error ?? 'Failed to load monitoring components')
+    setData(json.objects ?? [])
+  }
+
+  async function loadAll(e: React.FormEvent) {
+    e.preventDefault()
+    setIsLoading(true); setError(null); setData(null); setAvailable(null)
+    try {
+      const url = envUrl.trim()
+      let configResp: Response
+      try {
+        configResp = await apiFetch(`${API_URL}/api/flows/monitor-configurations?environmentUrl=${encodeURIComponent(url)}`)
+      } catch {
+        setError(`Cannot reach the backend server at ${API_URL}. Make sure the backend is running.`)
+        return
+      }
+      const configJson = await configResp.json()
+      if (!configResp.ok) throw new Error(configJson.error ?? 'Failed to load monitor configurations')
+      setAvailable(configJson.available)
+      if (!configJson.available || (configJson.configurations ?? []).length === 0) {
+        setConfigurations([]); setConfigurationId(''); return
+      }
+      const configs: MonitorConfigurationOption[] = configJson.configurations
+      setConfigurations(configs)
+      const firstId = configs[0].id
+      setConfigurationId(firstId)
+      await loadObjects(firstId, url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function switchConfiguration(configId: string) {
+    setConfigurationId(configId)
+    setIsLoading(true); setError(null)
+    try {
+      await loadObjects(configId, envUrl.trim())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return { envUrl, setEnvUrl, isLoading, error, available, configurations, configurationId, switchConfiguration, data, loadAll }
+}
+
+function ConfigurationSelect({ configurations, value, onChange }: {
+  configurations: MonitorConfigurationOption[]; value: string; onChange: (id: string) => void
+}) {
+  if (configurations.length <= 1) return null
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className="rounded-lg px-3 py-1.5 text-xs focus:outline-none"
+      style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-mid)', color: 'var(--text-primary)' }}>
+      {configurations.map(c => <option key={c.id} value={c.id}>{c.name}{c.environmentTitle ? ` (${c.environmentTitle})` : ''}</option>)}
+    </select>
+  )
+}
+
+function NotAvailableNotice() {
+  return (
+    <div className="rounded-lg px-4 py-3 text-xs"
+      style={{ backgroundColor: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.15)', color: '#fbbf24' }}>
+      No greymatter Monitor Objects solution was found in this environment. This section only works in environments where that custom monitoring table is installed.
+    </div>
+  )
+}
+
+// ─── Section 04: Monitoring Components ───────────────────────────────────────
+
+type MonitorFilter = 'all' | 'on' | 'off' | 'not_found' | 'pass' | 'fail' | 'cloud_flow' | 'workflow'
+
+function MonitoringComponentsSection() {
+  const { envUrl, setEnvUrl, isLoading, error, available, configurations, configurationId, switchConfiguration, data, loadAll } = useMonitorObjects()
+  const [filter, setFilter]   = useState<MonitorFilter>('all')
+  const [search, setSearch]   = useState('')
+  const [showAll, setShowAll] = useState(false)
+
+  const entries = data ?? []
+  const counts = {
+    all: entries.length,
+    on: entries.filter(e => e.currentStatus).length,
+    off: entries.filter(e => !e.currentStatus).length,
+    not_found: entries.filter(e => !e.isFound).length,
+    pass: entries.filter(e => e.passValidation).length,
+    fail: entries.filter(e => !e.passValidation).length,
+    cloud_flow: entries.filter(e => e.objectType === 'cloud_flow').length,
+    workflow: entries.filter(e => e.objectType === 'workflow').length,
+  }
+  const q = search.toLowerCase()
+  const filtered = entries.filter(e => {
+    if (filter === 'on') return e.currentStatus
+    if (filter === 'off') return !e.currentStatus
+    if (filter === 'not_found') return !e.isFound
+    if (filter === 'pass') return e.passValidation
+    if (filter === 'fail') return !e.passValidation
+    if (filter === 'cloud_flow') return e.objectType === 'cloud_flow'
+    if (filter === 'workflow') return e.objectType === 'workflow'
+    return true
+  }).filter(e => !q || e.name.toLowerCase().includes(q))
+
+  const tabs: { key: MonitorFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: counts.all },
+    { key: 'on', label: 'On', count: counts.on },
+    { key: 'off', label: 'Off', count: counts.off },
+    { key: 'not_found', label: 'Not Found', count: counts.not_found },
+    { key: 'pass', label: 'Pass', count: counts.pass },
+    { key: 'fail', label: 'Fail', count: counts.fail },
+    { key: 'cloud_flow', label: 'Cloud Flows', count: counts.cloud_flow },
+    { key: 'workflow', label: 'Workflows', count: counts.workflow },
+  ]
+
+  function exportCsv() {
+    if (!data) return
+    const rows = [
+      ['Name', 'Object Type', 'Intended Status', 'Current Status', 'Is Found', 'Pass the Validation', 'Alert Required', 'Alert Sent', 'Last Validation Check'],
+      ...filtered.map(e => [
+        e.name,
+        e.objectType === 'cloud_flow' ? 'Cloud Flow' : 'Workflow',
+        e.intendedStatus ? 'On' : 'Off',
+        e.currentStatus ? 'On' : 'Off',
+        e.isFound ? 'Yes' : 'No',
+        e.passValidation ? 'Yes' : 'No',
+        e.alertRequired ? 'Yes' : 'No',
+        e.alertSent ? 'Yes' : 'No',
+        e.lastValidationCheck ?? '',
+      ]),
+    ]
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' }))
+    a.download = `monitoring-components-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+  }
+
+  return (
+    <>
+      <form onSubmit={loadAll}
+        className="relative rounded-xl overflow-hidden"
+        style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="absolute top-0 left-0 right-0 h-px"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(45,212,191,0.5), transparent)' }} />
+        <div className="px-6 py-6">
+          <p className="text-xs font-semibold tracking-[0.22em] uppercase mb-5" style={{ color: 'var(--text-muted)' }}>Configuration</p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium tracking-wider uppercase mb-2" style={{ color: 'var(--text-secondary)' }}>Environment URL</label>
+              <input type="url" placeholder="https://yourorg.crm.dynamics.com" value={envUrl}
+                onChange={e => setEnvUrl(e.target.value)} required
+                className="w-full rounded-lg px-4 py-3 text-sm focus:outline-none transition-all"
+                style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-mid)', color: 'var(--text-primary)', caretColor: '#2dd4bf' }}
+                onFocus={e => { e.currentTarget.style.borderColor = 'rgba(45,212,191,0.4)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(45,212,191,0.08)' }}
+                onBlur={e =>  { e.currentTarget.style.borderColor = 'var(--border-mid)'; e.currentTarget.style.boxShadow = 'none' }} />
+            </div>
+            <div className="flex items-end">
+              <button type="submit" disabled={isLoading || !envUrl.trim()}
+                className="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ backgroundColor: '#0d9488', boxShadow: '0 0 20px rgba(13,148,136,0.3)' }}
+                onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#0f766e' }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = '#0d9488' }}>
+                {isLoading ? 'Loading…' : 'Load Components'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {error && (
+        <div className="rounded-lg px-4 py-3 text-xs"
+          style={{ backgroundColor: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', color: '#f87171' }}>
+          {error}
+        </div>
+      )}
+
+      {available === false && <NotAvailableNotice />}
+
+      {isLoading && (
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          <SkeletonTable rows={8} cols={5} />
+        </div>
+      )}
+
+      {data && (
+        <div className="relative rounded-xl overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="absolute top-0 left-0 right-0 h-px"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(45,212,191,0.5), transparent)' }} />
+
+          <div className="px-6 py-5 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
+            {[
+              { label: 'Total',       value: counts.all,        color: 'var(--text-primary)' },
+              { label: 'On',          value: counts.on,         color: '#4ade80' },
+              { label: 'Off',         value: counts.off,        color: '#94a3b8' },
+              { label: 'Not Found',   value: counts.not_found,  color: counts.not_found > 0 ? '#f87171' : '#4ade80' },
+              { label: 'Pass',        value: counts.pass,       color: '#4ade80' },
+              { label: 'Fail',        value: counts.fail,       color: counts.fail > 0 ? '#f87171' : '#4ade80' },
+              { label: 'Cloud Flows', value: counts.cloud_flow, color: '#60a5fa' },
+              { label: 'Workflows',   value: counts.workflow,   color: '#a78bfa' },
+            ].map(s => (
+              <div key={s.label}>
+                <p className="text-xs tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
+                <p className="text-2xl font-display font-semibold mt-1" style={{ color: s.color }}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="px-6 py-3 flex flex-wrap items-center justify-between gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div className="flex gap-2 flex-wrap items-center">
+              {tabs.map(t => (
+                <button key={t.key} onClick={() => { setFilter(t.key); setShowAll(false) }}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
+                  style={filter === t.key
+                    ? { backgroundColor: 'rgba(45,212,191,0.1)', color: '#2dd4bf', border: '1px solid rgba(45,212,191,0.25)' }
+                    : { backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-bright)' }
+                  }>
+                  {t.label} <span className="ml-1 opacity-60">{t.count}</span>
+                </button>
+              ))}
+              <ConfigurationSelect configurations={configurations} value={configurationId} onChange={switchConfiguration} />
+            </div>
+            <div className="flex items-center gap-3">
+              <input type="text" placeholder="Search components…" value={search}
+                onChange={e => { setSearch(e.target.value); setShowAll(false) }}
+                className="rounded-lg px-3 py-1.5 text-xs transition-all focus:outline-none"
+                style={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border-mid)', color: 'var(--text-primary)', width: '160px' }} />
+              <button onClick={exportCsv} disabled={filtered.length === 0}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-bright)' }}>
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <p className="px-6 py-8 text-sm text-center" style={{ color: 'var(--text-muted)' }}>No components match this filter.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {['Name', 'Object Type', 'Intended Status', 'Current Status', 'Is Found', 'Pass the Validation', 'Alert Required', 'Alert Sent', 'Last Validation Check'].map((h, i) => (
+                      <th key={i} className="px-4 py-3 text-left font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.slice(0, showAll ? undefined : 10).map((e, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{e.name}</td>
+                      <td className="px-4 py-3"><ObjectTypeBadge type={e.objectType} /></td>
+                      <td className="px-4 py-3"><EnabledPill enabled={e.intendedStatus} /></td>
+                      <td className="px-4 py-3"><EnabledPill enabled={e.currentStatus} /></td>
+                      <td className="px-4 py-3"><PassBadge pass={e.isFound} /></td>
+                      <td className="px-4 py-3"><PassBadge pass={e.passValidation} /></td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{e.alertRequired ? 'Yes' : 'No'}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{e.alertSent ? 'Yes' : 'No'}</td>
+                      <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{e.lastValidationCheck ? timeAgo(e.lastValidationCheck) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filtered.length > 10 && (
+                <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+                  <button onClick={() => setShowAll(v => !v)} className="text-xs font-medium" style={{ color: '#2dd4bf' }}>
+                    {showAll ? 'Show less' : `Show ${filtered.length - 10} more`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FlowsPage() {
@@ -1650,6 +1993,21 @@ export default function FlowsPage() {
             </p>
           </div>
           <ConnectionRefSection />
+        </section>
+
+        {/* Divider */}
+        <div className="w-full h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border-bright), transparent)' }} />
+
+        {/* Section 4: Monitoring Components */}
+        <section className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.24em] uppercase mb-1" style={{ color: '#2dd4bf' }}>Section 04</p>
+            <h2 className="font-display font-semibold text-lg" style={{ color: 'var(--text-primary)' }}>Monitoring Components</h2>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+              The curated list of cloud flows and workflows tracked in the client's greymatter Monitor Objects table — intended vs. current state, and pass/fail validation straight from their own results.
+            </p>
+          </div>
+          <MonitoringComponentsSection />
         </section>
 
       </main>

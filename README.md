@@ -10,6 +10,7 @@
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
+![Electron](https://img.shields.io/badge/Electron-47848F?style=flat-square&logo=electron&logoColor=white)
 
 ---
 
@@ -21,20 +22,27 @@
 | **Option Set Guard** | Detects and restores option set values overwritten by solution imports — compares against pinned config |
 | **Deployment Readiness** | Runs 6 parallel checks (active layers, flows, solutions, env vars, connection refs, option sets) and produces a pass/fail report |
 | **Environment Comparison** | Diffs two Dataverse environments across solutions, flows, variables, and connection references |
-| **Cloud Flow Monitor** | Flow health dashboard, silent trigger detection, connection ref blast radius map with auto-fix |
+| **Cloud Flow Monitor** | Flow health dashboard, silent trigger detection, connection ref blast radius map with auto-fix, curated monitoring against the client's own validation table |
 | **Pipeline Health** | Azure DevOps run history, sparklines, flaky detection, error pattern matching with suggested fixes, cancel/retry |
 | **Pipeline Optimizer** | Scans YAML pipelines with 47 performance rules, applies safe fixes, and opens a draft PR |
+| **Diagnostics & Audit Log** | One-click connectivity test for Dataverse and Azure DevOps, plus a running log of every automated action the app has taken |
 
 ---
 
 ## Download and run
 
-**No installs required — just download and double-click.**
+Two ways to run Vantage — pick one from [**Releases**](../../releases/latest):
 
-1. Go to [**Releases**](../../releases/latest) and download the latest `vantage-vX.X.X.zip`
+**Portable (no install)**
+1. Download `vantage-vX.X.X.zip`
 2. Extract the zip anywhere on your machine
 3. Double-click **`Start Vantage.bat`**
 4. Your browser opens automatically — a setup wizard guides you through entering credentials on first launch
+
+**Desktop app (installer)**
+1. Download `Vantage Setup X.X.X.exe`
+2. Run it — installs with a Start Menu shortcut and system tray icon
+3. Auto-updates in the background and notifies you when a new version is ready
 
 Credentials are encrypted and saved locally. You never enter them again.
 
@@ -53,7 +61,7 @@ AI features use the shared Vantage agent configured by your administrator. Provi
 | **Authentication** | MSAL `ConfidentialClientApplication` client credentials flow (Dataverse) · PAT Basic auth (Azure DevOps) |
 | **APIs consumed** | Microsoft Dataverse OData v9.2 · Azure DevOps Build REST API · Azure DevOps Git REST API |
 | **Security middleware** | Helmet (CSP, HSTS, X-Frame-Options) · CORS lockdown · HttpOnly local sessions · rate limiting · SSRF prevention · path traversal blocking |
-| **Distribution** | Portable Windows bundle with the official Node.js runtime · Docker multi-stage build · GitHub Actions CI/CD |
+| **Distribution** | Portable Windows bundle with the official Node.js runtime · Electron desktop installer with auto-update · Docker multi-stage build · GitHub Actions CI/CD |
 | **Data** | JSON scan history · AES-256-GCM encrypted credentials · in-app first-launch setup wizard |
 
 ---
@@ -62,8 +70,8 @@ AI features use the shared Vantage agent configured by your administrator. Provi
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Portable Vantage bundle (official Node.js runtime)      │
-│                                                          │
+│  Portable bundle (Node.js runtime)  or  Electron app     │
+│  (same backend either way; Electron adds tray + auto-update) │
 │  ┌──────────────┐    ┌──────────────────────────────┐   │
 │  │  React SPA   │    │  Express API                 │   │
 │  │  (served     │───▶│  /api/*  (X-API-Key auth)    │   │
@@ -145,6 +153,8 @@ Diffs two Dataverse environments in parallel across four dimensions: solutions, 
 
 **Auto-fix** — locates a healthy donor connection ref of the same connector type and copies its credential to the broken one. Requires explicit confirmation before executing.
 
+**Monitoring Components** — for environments with the client's own pre-built monitoring solution installed (a curated Dataverse table of components the client actually cares about, intended vs. current state, pass/fail validation), reads directly from that table instead of recomputing from the raw flow list. Falls back to a clear "not available" notice in environments where that solution isn't installed.
+
 ---
 
 ### 06 · Pipeline Health Dashboard
@@ -187,6 +197,14 @@ Branch safety: verifies target branch exists, checks optimizer branch doesn't al
 
 ---
 
+### 08 · Diagnostics & Audit Log
+
+**Diagnostics** — one-click connectivity test against Dataverse (`WhoAmI`, security role lookup) and Azure DevOps (account lookup via PAT), so a broken credential is obvious before a user runs a real scan.
+
+**Audit Log** — a running record of every automated action Vantage has taken (auto-fixes, option set restores, remediation runs), with success/failure counts at a glance.
+
+---
+
 ## Security
 
 | Layer | Implementation |
@@ -217,7 +235,7 @@ vantage/
 ├── backend/dist/             Compiled backend
 ├── Dockerfile                Multi-stage build (frontend → backend → Alpine runtime)
 ├── docker-compose.yml
-├── Start Vantage.bat         Fallback launcher for Docker / Node.js dev environments
+├── electron/                 Desktop app shell (main process, tray, auto-update, NSIS packaging)
 ├── backend/
 │   └── src/
 │       ├── index.ts          Express server — security middleware, route wiring, static serving
@@ -227,16 +245,17 @@ vantage/
 │       ├── pipelines.ts      Pipeline health aggregation, 22 error pattern matchers
 │       ├── readiness.ts      6-check parallel readiness runner
 │       ├── flows.ts          Cloud flow health + silent trigger detection
+│       ├── monitorObjects.ts Reads the client's curated greymatter Monitor Objects table
 │       ├── optionsets.ts     Option set comparison + restore
 │       ├── connectionrefs.ts Connection reference health + auto-fix
 │       ├── comparison.ts     Cross-environment diff engine
 │       ├── pastecompare.ts   TSV paste parser (Loop / Excel / Sheets)
-│       └── routes/           12 Express routers, one per domain
+│       └── routes/           13 Express routers, one per domain
 ├── frontend/
 │   └── src/
 │       ├── App.tsx           Router + first-launch setup gate
 │       ├── api.ts            Fetch wrapper — API key resolution, relative URL support
-│       ├── pages/            10 page components
+│       ├── pages/            12 page components
 │       └── components/       Shared UI (Header, StatusBadge, charts, etc.)
 └── data/                     Credentials + scan history — auto-created, gitignored
 ```
@@ -270,7 +289,7 @@ cd ../backend
 npm run build          # output: backend/dist/
 ```
 
-Tagged GitHub releases assemble these outputs with the official Node.js Windows runtime into a portable ZIP.
+A `[release]` commit (see below) assembles these outputs with the official Node.js Windows runtime into a portable ZIP, and separately builds the Electron installer.
 
 **Docker:**
 ```bash
@@ -285,8 +304,9 @@ The team uses one consistent Vantage AI agent: the same Groq model, prompts, and
 
 Users explicitly enable AI data sharing during setup. Pipeline optimization sends stage names and dependency structure—not credentials or complete YAML files. Flow explanations send only the flow name and error text selected by the user.
 
-**Publish a release** — GitHub Actions builds the exe and publishes automatically:
+**Publish a release** — include `[release]` in a commit message pushed to `main`. GitHub Actions auto-bumps the patch version, tags it, builds the portable ZIP, builds the Electron installer, and publishes both to GitHub Releases:
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git commit -m "Add new feature [release]"
+git push origin main
 ```
+To publish a specific version instead of an auto-bumped patch, trigger the **Release** workflow manually from the Actions tab with a `version` input (e.g. `v2.0.0`).
